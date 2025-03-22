@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 from gemini_helper import get_gemini_response
-from docs_helper import load_all_files, DOCS_DIR, PRIVATE_DIR, TEMPLATES_DIR
+from docs_helper import load_all_files,read_markdown_file, DOCS_DIR, PRIVATE_DIR, TEMPLATES_DIR
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -91,4 +91,20 @@ async def chat_with_files(chat_request: ChatRequest):
         
     except Exception as e:
         print(f"Error in chat_with_files: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/content/{file_name}")
+async def get_content(file_name: str):
+    try:
+        # Try private directory first
+        file_path = os.path.join(PRIVATE_DIR, file_name)
+        if not os.path.exists(file_path):
+            # Fall back to templates directory
+            file_path = os.path.join(TEMPLATES_DIR, file_name)
+            if not os.path.exists(file_path):
+                raise HTTPException(status_code=404, detail="File not found")
+        
+        content = read_markdown_file(file_path)
+        return {"content": content}
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
