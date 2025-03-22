@@ -7,6 +7,7 @@ export const useChat = () => {
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [hasFiles, setHasFiles] = useState(false);
+    const [showQuickMessages, setShowQuickMessages] = useState(true);
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
         {
             type: 'initial',
@@ -41,14 +42,16 @@ export const useChat = () => {
         return () => { mounted = false; };
     }, []);
 
-    const handleSendMessage = async () => {
-        if (!message.trim()) return;
+    const handleSendMessage = async (directMessage?: string) => {
+        const messageToSend = directMessage || message;
+        if (!messageToSend.trim()) return;
 
-        setChatHistory(prev => [...prev, { type: 'user', content: message }]);
+        setShowQuickMessages(false);
+        setChatHistory(prev => [...prev, { type: 'user', content: messageToSend }]);
         setIsLoading(true);
 
         // Send the full chat history - backend will handle the limit
-        const result = await chatService.sendMessage(message, chatHistory);
+        const result = await chatService.sendMessage(messageToSend, chatHistory);
 
         if (result.success) {
             setChatHistory(prev => [...prev, {
@@ -72,6 +75,7 @@ export const useChat = () => {
         isLoading,
         hasFiles,
         chatHistory,
-        handleSendMessage
+        handleSendMessage,
+        showQuickMessages,
     };
 }; 
