@@ -76,6 +76,7 @@ docs/
 
 -   `GET /`: Health check
 -   `GET /check-paths`: Check available documents
+-   `GET /api/content/{file_name}`: Retrieve specific file content
 -   `POST /generate-text`: Basic chat
 -   `POST /chat-with-files`: Context-aware chat
 

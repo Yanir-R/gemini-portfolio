@@ -35,6 +35,19 @@ Backend service for the AI chat application, handling document processing and Ge
 }
 ```
 
+### Content Retrieval
+
+`GET /api/content/{file_name}`
+
+```json
+{
+    "content": "Markdown content of the requested file"
+}
+```
+
+-   Retrieves content of specific markdown files
+-   Checks private directory first, then falls back to templates
+
 ### Chat Endpoints
 
 #### Basic Chat

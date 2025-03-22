@@ -9,6 +9,7 @@ Frontend for the Gemini AI Chat Application built with React, TypeScript, and Ta
 -   Loading states and error handling
 -   Responsive design
 -   Accessibility features
+-   Interactive message quick-actions
 
 ## Tech Stack
 
@@ -42,6 +43,7 @@ Main chat interface component:
 -   Manages API communication
 -   Implements loading states
 -   Error handling
+-   Interactive message boxes for quick responses
 
 ### Available Props and Types
 
