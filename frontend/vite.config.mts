@@ -37,5 +37,6 @@ export default defineConfig({
             'axios'
             // Add other dependencies as needed
         ]
-    }
+    },
+    envPrefix: 'VITE_'
 }) 

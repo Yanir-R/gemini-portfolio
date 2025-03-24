@@ -7,12 +7,31 @@ export const chatService = {
     checkFiles: async () => {
         try {
             const response = await apiClient.get(API_ENDPOINTS.CHECK_FILES);
+            console.log('Check files response:', response.data);
             return {
-                hasFiles: (response.data.private_files?.length > 0)
+                hasFiles: (response.data.private_files?.length > 0),
+                paths: {
+                    docsDir: response.data.docs_dir,
+                    privateDir: response.data.private_dir,
+                    exists: {
+                        docs: response.data.docs_exists,
+                        private: response.data.private_exists
+                    }
+                }
             };
         } catch (error) {
             console.error('Error checking files:', error);
-            return { hasFiles: false };
+            if (error.response) {
+                console.error('Error response:', {
+                    status: error.response.status,
+                    data: error.response.data,
+                    headers: error.response.headers
+                });
+            }
+            return {
+                hasFiles: false,
+                error: error.response?.status === 404 ? 'Path not found' : 'Server error'
+            };
         }
     },
     sendMessage: async (message: string, conversationHistory: ChatMessage[]) => {

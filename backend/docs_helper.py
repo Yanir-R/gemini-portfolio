@@ -1,8 +1,12 @@
 import os
 from typing import List, Optional
 
-DOCS_DIR = os.path.join(os.path.dirname(__file__), "docs")
-PRIVATE_DIR = os.path.join(DOCS_DIR, "private")
+# Get the absolute path of the current file's directory
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Construct absolute paths
+DOCS_DIR = os.path.join(BASE_DIR, 'backend', 'docs')
+PRIVATE_DIR = os.path.join(DOCS_DIR, 'private')
 
 def read_markdown_file(file_path: str) -> str:
     """Read content from markdown file"""

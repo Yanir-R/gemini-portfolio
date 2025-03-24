@@ -55,7 +55,10 @@ async def check_paths():
         "private_dir": PRIVATE_DIR,
         "docs_exists": os.path.exists(DOCS_DIR),
         "private_exists": os.path.exists(PRIVATE_DIR),
-        "private_files": os.listdir(PRIVATE_DIR) if os.path.exists(PRIVATE_DIR) else []
+        "private_files": os.listdir(PRIVATE_DIR) if os.path.exists(PRIVATE_DIR) else [],
+        "current_working_dir": os.getcwd(),
+        "absolute_docs_path": os.path.abspath(DOCS_DIR),
+        "absolute_private_path": os.path.abspath(PRIVATE_DIR)
     }
 
 @app.post("/generate-text")
