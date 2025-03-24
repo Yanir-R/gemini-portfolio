@@ -1,13 +1,21 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import os
 from gemini_helper import get_gemini_response
-from docs_helper import load_all_files,read_markdown_file, DOCS_DIR, PRIVATE_DIR, TEMPLATES_DIR
+from docs_helper import load_all_files, read_markdown_file, DOCS_DIR, PRIVATE_DIR
 from pydantic import BaseModel
 from typing import List, Optional
+import os
+from os import getenv
+import datetime
 
 load_dotenv()
+
+FRONTEND_PROD_URL = getenv("FRONTEND_PROD_URL")
+FRONTEND_DEV_URL = getenv("FRONTEND_DEV_URL")
+FRONTEND_VITE_URL = getenv("FRONTEND_VITE_URL")
+
+allowed_origins = [url for url in [FRONTEND_PROD_URL, FRONTEND_DEV_URL, FRONTEND_VITE_URL] if url]
 
 class ChatMessage(BaseModel):
     type: str
@@ -23,16 +31,21 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    max_age=86400,
 )
 
 @app.get("/")
-def read_root():
-    return {"message": "FastAPI is running"}
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "backend",
+        "message": "FastAPI is running",
+        "timestamp": datetime.datetime.now().isoformat()
+    }
 
 @app.get("/check-paths")
 async def check_paths():
@@ -40,12 +53,9 @@ async def check_paths():
     return {
         "docs_dir": DOCS_DIR,
         "private_dir": PRIVATE_DIR,
-        "templates_dir": TEMPLATES_DIR,
         "docs_exists": os.path.exists(DOCS_DIR),
         "private_exists": os.path.exists(PRIVATE_DIR),
-        "templates_exists": os.path.exists(TEMPLATES_DIR),
-        "private_files": os.listdir(PRIVATE_DIR) if os.path.exists(PRIVATE_DIR) else [],
-        "template_files": os.listdir(TEMPLATES_DIR) if os.path.exists(TEMPLATES_DIR) else []
+        "private_files": os.listdir(PRIVATE_DIR) if os.path.exists(PRIVATE_DIR) else []
     }
 
 @app.post("/generate-text")
@@ -96,13 +106,9 @@ async def chat_with_files(chat_request: ChatRequest):
 @app.get("/api/content/{file_name}")
 async def get_content(file_name: str):
     try:
-        # Try private directory first
         file_path = os.path.join(PRIVATE_DIR, file_name)
         if not os.path.exists(file_path):
-            # Fall back to templates directory
-            file_path = os.path.join(TEMPLATES_DIR, file_name)
-            if not os.path.exists(file_path):
-                raise HTTPException(status_code=404, detail="File not found")
+            raise HTTPException(status_code=404, detail="File not found")
         
         content = read_markdown_file(file_path)
         return {"content": content}
