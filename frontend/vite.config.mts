@@ -44,7 +44,6 @@ export default defineConfig(({ mode }) => {
                 'react',
                 'react-dom',
                 'axios'
-                // Add other dependencies as needed
             ]
         },
         envPrefix: 'VITE_',

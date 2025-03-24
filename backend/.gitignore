@@ -42,6 +42,3 @@ htmlcov/
 .cache
 coverage.xml
 *.cover
-
-# google cloud run 
-.loud-run-service-key.json
