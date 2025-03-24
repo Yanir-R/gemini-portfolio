@@ -1,27 +1,34 @@
 # Gemini AI Chat Application
 
-A full-stack chat application built with React TypeScript frontend and FastAPI backend, integrated with Google's Gemini AI API.
+A full-stack chat application built with React TypeScript frontend and FastAPI backend, integrated with Google's Gemini AI API and deployed on Google Cloud Run.
 
 ## Features
 
 -   Real-time chat interface with Gemini AI
 -   Document-aware responses
 -   Private/public document management
--   Built with TypeScript and FastAPI
+-   Automated deployment with GitHub Actions
+-   Cloud Run hosting for both frontend and backend
 
 ## Prerequisites
 
 -   Node.js v14.0.0+ and npm v6.0.0+
 -   Python 3.8+
 -   Gemini API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+-   Google Cloud account with Cloud Run enabled
+-   GitHub account for automated deployments
 
 ## Quick Start
 
-### 1. Clone and Setup Docs
+### 1. Environment Setup
 
 ```bash
+# Clone the repository
+git clone <your-repository-url>
+cd <project-directory>
+
 # Create documentation directories
-mkdir -p docs/private docs/templates
+mkdir -p backend/docs/private backend/docs/templates
 ```
 
 ### 2. Frontend Setup
@@ -30,10 +37,8 @@ mkdir -p docs/private docs/templates
 cd frontend
 npm install
 npm run dev
-# Available at http://localhost:5173
+# Development server at http://localhost:3000
 ```
-
-For detailed API documentation and frontend configuration, see [frontend/README.md](frontend/README.md)
 
 ### 3. Backend Setup
 
@@ -43,34 +48,68 @@ python3 -m venv venv
 source venv/bin/activate  # Windows: .\venv\Scripts\activate
 pip3 install -r requirements.txt
 
-# Setup Gemini
-cp gemini_helper.template.py gemini_helper.py
-echo "GEMINI_API_KEY=your_api_key_here" > .env
-
-# Start server
-uvicorn main:app --reload
-# Available at http://localhost:8000
+# Start development server
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+## Environment Configuration
+
+### Frontend (.env files)
+
+```bash
+# frontend/.env.development
+VITE_BACKEND_URL=http://localhost:8000
+VITE_ENV=development
+
+# frontend/.env.production
+VITE_BACKEND_URL=https://backend-240663900746.me-west1.run.app
+VITE_ENV=production
+```
+
+### Backend (.env files)
+
+```bash
+# backend/.env.development
+FRONTEND_DEV_URL=http://localhost:3000
+GEMINI_API_KEY=your_api_key_here
+
+# backend/.env.production
+FRONTEND_PROD_URL=https://frontend-240663900746.me-west1.run.app
+GEMINI_API_KEY=your_api_key_here
+```
+
+## Deployment
+
+The application uses GitHub Actions for automated deployment to Google Cloud Run.
+
+### Required GitHub Secrets
+
+-   `GCP_PROJECT_ID`: Your Google Cloud project ID
+-   `GCP_SA_KEY`: Service account key with Cloud Run access
+-   `GEMINI_API_KEY`: Your Gemini API key
+
+### Production URLs
+
+-   Frontend: https://frontend-240663900746.me-west1.run.app
+-   Backend: https://backend-240663900746.me-west1.run.app
 
 ## Documentation System
 
 ```bash
-docs/
-├── private/    # Your private docs (gitignored)
+backend/docs/
+├── private/    # Private docs (gitignored)
+│   └── resume.md
 └── templates/  # Public templates
 ```
 
-### Usage
+For detailed documentation:
 
--   Add personal files to `private/` (automatically gitignored)
--   Use templates from `templates/` for public sharing
--   Supports Markdown (.md) and PDF files
--   AI reads private files first, falls back to templates
+-   [Frontend README](frontend/README.md)
+-   [Backend README](backend/README.md)
 
-### Available Templates
+## License
 
--   `about-me.md`: Professional profile
--   `resume.md`: Resume structure
+[MIT License](LICENSE)
 
 ## API Overview
 
@@ -80,8 +119,6 @@ docs/
 -   `POST /generate-text`: Basic chat
 -   `POST /chat-with-files`: Context-aware chat
 
-For detailed API documentation and backend configuration, see [backend/README.md](backend/README.md)
-
 ## Contributing
 
 1. Fork repository
@@ -90,7 +127,4 @@ For detailed API documentation and backend configuration, see [backend/README.md
 4. Push to branch
 5. Open Pull Request
 
-## License
-
-[MIT License](LICENSE)
 # Test workflow

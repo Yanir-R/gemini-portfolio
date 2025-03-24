@@ -1,16 +1,20 @@
 # AI Portfolio Backend
 
-This is the backend service for the AI Portfolio application, built with FastAPI and Python.
+FastAPI backend service deployed on Google Cloud Run with automated GitHub Actions deployment.
 
 ## Project Structure
 
-├── docs/ # Documentation files
-│ └── private/ # Private markdown files (resume, about-me)
-├── main.py # Main FastAPI application
+```bash
+backend/
+├── docs/
+│   ├── private/     # Private markdown files (resume, about-me)
+│   └── templates/   # Template files
+├── main.py         # FastAPI application
 ├── gemini_helper.py # Gemini AI integration
-├── docs_helper.py # Documentation handling
+├── docs_helper.py  # Documentation handling
 ├── requirements.txt # Python dependencies
-└── Dockerfile # Container configuration
+└── Dockerfile      # Container configuration
+```
 
 ## Technical Stack
 
@@ -18,97 +22,42 @@ This is the backend service for the AI Portfolio application, built with FastAPI
 -   Python 3.8+: Runtime environment
 -   Gemini AI: Language model
 -   PyPDF2: PDF processing
--   Pydantic: Data validation
+-   Google Cloud Run: Deployment platform
+-   GitHub Actions: CI/CD automation
+
+## Environment Configuration
+
+### Development
+
+```bash
+# backend/.env.development
+FRONTEND_DEV_URL=http://localhost:3000
+FRONTEND_VITE_URL=http://localhost:5173
+GEMINI_API_KEY=your_api_key_here
+```
+
+### Production
+
+```bash
+# backend/.env.production
+FRONTEND_PROD_URL=https://frontend-240663900746.me-west1.run.app
+GEMINI_API_KEY=your_api_key_here
+```
 
 ## API Endpoints
 
-### Health Check
+-   `GET /health`: Service health check and status
+-   `GET /check-paths`: Document system verification
+-   `POST /chat-with-files`: Context-aware AI chat
+-   `GET /api/content/{file_name}`: Markdown content retrieval
 
-`GET /health`
+## Local Development
 
-```json
-{ "message": "FastAPI is running", "timestamp": "2023-04-01T12:00:00" }
-```
-
-### Document System Check
-
-`GET /check-paths`
-
-```json
-{
-    "private_files": ["resume.md", "about-me.md"],
-    "private_exists": true
-}
-```
-
-### Content Retrieval
-
-`GET /api/content/{file_name}`
-
-```json
-{
-    "content": "Markdown content of the requested file"
-}
-```
-
--   Retrieves content of specific markdown files
-
-### Chat Endpoints
-
-#### Basic Chat
-
-`POST /generate-text`
-
-```json
-{
-    "message": "Your message here"
-}
-```
-
--   Simple chat without document context
--   Direct Gemini AI interaction
-
-#### Context-Aware Chat
-
-`POST /chat-with-files`
-
-```json
-{
-    "message": "Your message here",
-    "conversation_history": [
-        { "type": "user", "content": "Previous message" },
-        { "type": "ai", "content": "Previous response" }
-    ]
-}
-```
-
--   Includes document context
--   Maintains conversation history
--   Supports up to 4 previous messages
-
-## Document Processing
-
-The backend handles documents in the following location:
-
--   `/docs/private/`: Personal documents (gitignored)
-
-### Supported Formats
-
--   Markdown (.md)
--   PDF (.pdf)
-
-### Processing Logic
-
-1. Reads from private directory
-2. Combines all document content for AI context
-
-## Setup and Installation
-
-1. Create a virtual environment:
+1. Create virtual environment:
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 ```
 
 2. Install dependencies:
@@ -117,93 +66,98 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-3. Set up environment variables:
-   Create a `.env` file with:
-
-    ```
-    GEMINI_API_KEY=your_api_key_here
-    FRONTEND_PROD_URL=your_production_frontend_url
-    FRONTEND_DEV_URL=http://localhost:3000
-    FRONTEND_VITE_URL=http://localhost:5173
-    ```
-
-4. Run the development server:
+3. Run development server:
 
 ```bash
-uvicorn main:app --reload
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ## Deployment
 
-Deploy to Google Cloud Run:
+### Automated Deployment (GitHub Actions)
+
+Push to main branch triggers automatic deployment to Cloud Run via GitHub Actions workflow.
+
+Required GitHub Secrets:
+
+-   `GCP_PROJECT_ID`: Google Cloud project identifier
+-   `GCP_SA_KEY`: Service account key with Cloud Run access
+-   `GEMINI_API_KEY`: Gemini API key for production
+
+### Manual Deployment (if needed)
 
 ```bash
+# Build and deploy to Cloud Run
 gcloud run deploy backend \
   --source . \
   --platform managed \
   --region me-west1 \
-  --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY=your_api_key
+  --allow-unauthenticated
 ```
 
-## API Endpoints
+## Documentation System
 
--   `GET /check-paths`: Verify documentation files
--   `POST /chat-with-files`: Chat with AI about documentation
--   `GET /api/content/{filename}`: Get markdown content
--   `GET /health`: Health check endpoint that returns service status and timestamp
+### Directory Structure
 
-## Documentation Structure
+```bash
+docs/
+├── private/    # Personal documents (gitignored)
+│   ├── resume.md
+│   └── about-me.md
+└── templates/  # Public templates
+```
 
-The `docs/` directory contains:
+### Supported Formats
 
--   `private/`: Personal markdown files like resume and about-me (gitignored)
-
-## Development Guidelines
-
-### Error Handling
-
--   All endpoints include try-catch blocks
--   Standardized error responses
--   Detailed logging for debugging
-
-### File Processing
-
--   Automatic file type detection
--   Error recovery for corrupt files
-
-### Security
-
--   Private documents stay local
--   API key protection
--   CORS configuration
+-   Markdown (.md)
+-   PDF (.pdf)
 
 ## Troubleshooting
 
-### Common Issues
+### Cloud Run Issues
 
-1. File Permission Errors
+```bash
+# View service logs
+gcloud logs tail --project YOUR_PROJECT_ID
+
+# Check service status
+gcloud run services describe backend
+
+# Verify deployment
+gcloud run services list
+```
+
+### Local Development Issues
+
+1. File Permission Errors:
 
 ```bash
 chmod 755 docs
 chmod 644 docs/private/*.md
 ```
 
-2. Missing Directories
+2. Missing Directories:
 
 ```bash
 mkdir -p docs/private
 touch docs/private/.gitkeep
 ```
 
-3. API Key Issues
+3. Environment Issues:
 
--   Verify .env file exists with GEMINI_API_KEY
--   Check API key validity
+-   Verify .env files exist and are properly configured
+-   Check GEMINI_API_KEY validity
+-   Confirm CORS settings match frontend URLs
 
-4. Cloud Run Issues
+### GitHub Actions Issues
 
--   Check Cloud Build logs: `gcloud builds list`
--   Verify service status: `gcloud run services describe backend`
--   Check service URL is accessible
--   Verify environment variables are set correctly in Cloud Run
+-   Check Actions tab in repository for build logs
+-   Verify GitHub secrets are properly set
+-   Ensure service account has necessary permissions
+
+## Security Considerations
+
+-   Environment variables managed via GitHub Secrets
+-   CORS configuration for allowed origins
+-   Private documents protected via .gitignore
+-   Cloud Run security best practices
