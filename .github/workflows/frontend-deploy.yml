@@ -1,4 +1,4 @@
-name: Frontend Deploy
+name: Frontend Deploy v2
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
           else
             echo "ENVIRONMENT=development" >> $GITHUB_ENV
             echo "GCP_PROJECT=${{ secrets.GCP_DEV_PROJECT_ID }}" >> $GITHUB_ENV
-            echo "SERVICE_NAME=frontend-dev" >> $GITHUB_ENV
+            echo "SERVICE_NAME=frontend" >> $GITHUB_ENV
             echo "REGION=${{ secrets.GCP_REGION }}" >> $GITHUB_ENV
           fi
 
@@ -57,6 +57,35 @@ jobs:
           VITE_ENV: ${{ env.ENVIRONMENT }}
         run: npm run build
 
+      - name: Prepare for deployment
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: |
+          # Create more specific .gcloudignore
+          cat > .gcloudignore << EOL
+          .git
+          .gitignore
+          node_modules
+          README.md
+          .env*
+          .vscode
+          .github
+          # Include important files
+          !src/**
+          !public/**
+          !index.html
+          !package.json
+          !package-lock.json
+          !tsconfig.json
+          !vite.config.ts
+          !tailwind.config.js
+          !Dockerfile
+          !nginx.conf
+          EOL
+
+          # Verify files to be uploaded
+          echo "Files to be uploaded:"
+          gcloud meta list-files-for-upload
+
       - name: Google Auth
         uses: google-github-actions/auth@v2
         with:
@@ -66,15 +95,53 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Setup Artifact Registry
+        run: |
+          gcloud artifacts repositories create cloud-run-source-deploy \
+            --repository-format=docker \
+            --location=me-west1 \
+            --project=${{ env.GCP_PROJECT }} || true
+
       - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.SERVICE_NAME }}
-          source: ${{ env.FRONTEND_DIR }}
-          region: ${{ env.REGION }}
-          env_vars: |
-            VITE_ENV=${{ env.ENVIRONMENT }}
-            VITE_BACKEND_URL=${{ secrets.VITE_BACKEND_URL }}
+        id: deploy
+        run: |
+          echo "Starting deployment process..."
+          echo "Current directory: $(pwd)"
+          echo "Service name: frontend"
+          echo "Project ID: ${{ env.GCP_PROJECT }}"
+
+          # Clean any potential cached builds
+          rm -rf ${{ env.FRONTEND_DIR }}/.gcloud || true
+
+          # Build and deploy in one step
+          gcloud run deploy frontend \
+            --source ${{ env.FRONTEND_DIR }} \
+            --platform managed \
+            --region me-west1 \
+            --project ${{ env.GCP_PROJECT }} \
+            --allow-unauthenticated \
+            --port=80 \
+            --min-instances=0 \
+            --max-instances=4 \
+            --memory=256Mi \
+            --timeout=300 \
+            --service-account=${{ secrets.GCP_SA_EMAIL }} \
+            --set-env-vars="VITE_ENV=${{ env.ENVIRONMENT }},VITE_BACKEND_URL=${{ secrets.VITE_BACKEND_URL }}" \
+            --labels="managed-by=github-actions,commit-sha=${{ github.sha }}" \
+            --quiet
+
+      # Add error logging
+      - name: Log Build Info on Failure
+        if: failure()
+        run: |
+          echo "Checking recent builds..."
+          gcloud builds list --region me-west1 --limit 1
+
+          echo "Getting latest build logs..."
+          BUILD_ID=$(gcloud builds list --region me-west1 --format="value(id)" --limit=1)
+          if [ ! -z "$BUILD_ID" ]; then
+            gcloud builds log $BUILD_ID --region me-west1
+          fi
 
       - name: Map Custom Domain
         if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/main'
@@ -83,4 +150,4 @@ jobs:
           gcloud beta run domain-mappings create \
             --service ${{ env.SERVICE_NAME }} \
             --domain $DOMAIN \
-            --region ${{ env.REGION }}
+            --region me-west1 || echo "Domain mapping failed but continuing deployment"
