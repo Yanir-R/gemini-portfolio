@@ -106,11 +106,10 @@ jobs:
         id: deploy
         run: |
           echo "Starting deployment process..."
-          cd ${{ env.FRONTEND_DIR }}  # Change to frontend directory first
+          cd ${{ env.FRONTEND_DIR }}
 
-          # Build and deploy
           gcloud run deploy frontend \
-            --source . \  # Use . since we're already in frontend directory
+            --source . \
             --platform managed \
             --region me-west1 \
             --project ${{ env.GCP_PROJECT }} \
