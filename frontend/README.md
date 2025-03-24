@@ -1,6 +1,18 @@
-# React TypeScript Chat Frontend
+# AI Portfolio Frontend
 
-Frontend for the Gemini AI Chat Application built with React, TypeScript, and TailwindCSS.
+React-based frontend for the AI Portfolio application.
+
+## Project Structure
+
+```
+frontend/
+├── src/
+│   ├── api/          # API integration
+│   ├── components/   # React components
+│   └── pages/        # Page components
+├── public/           # Static assets
+└── vite.config.mts   # Vite configuration
+```
 
 ## Features
 
@@ -19,19 +31,63 @@ Frontend for the Gemini AI Chat Application built with React, TypeScript, and Ta
 -   Axios for API calls
 -   Vite for development
 
-## Development Setup
+## Setup and Installation
+
+1. Install dependencies:
 
 ```bash
-# Install dependencies
 npm install
+```
 
-# Start development server
+2. Set up environment variables:
+   Create `.env.development` for local development:
+
+    ```
+    VITE_BACKEND_URL=http://localhost:8000
+    ```
+
+    Create `.env.production` for production:
+
+    ```
+    VITE_BACKEND_URL=your_cloud_run_backend_url
+    ```
+
+## Development
+
+Run the development server:
+
+```bash
 npm run dev
-# Available at http://localhost:5173
+```
 
-# Build for production
+## Building and Deployment
+
+1. Build the application:
+
+```bash
 npm run build
 ```
+
+2. Deploy to Google Cloud Run:
+
+```bash
+gcloud run deploy frontend \
+  --source . \
+  --platform managed \
+  --region me-west1 \
+  --allow-unauthenticated \
+  --set-env-vars VITE_BACKEND_URL=your_backend_url
+```
+
+## Documentation Integration
+
+The frontend fetches documentation from the backend service. The documentation includes:
+
+-   Resume
+-   About Me
+-   AI chat responses
+
+Note: All documentation files are managed directly in the backend service's docs directory.
 
 ## Key Components
 
@@ -67,13 +123,6 @@ The frontend communicates with the backend at `http://localhost:8000` using:
 -   Document check: `GET /check-paths`
 -   Basic chat: `POST /generate-text`
 -   Context chat: `POST /chat-with-files`
-
-## Environment Variables
-
-```bash
-# Create .env file if needed
-VITE_API_URL=http://localhost:8000
-```
 
 ## Contributing
 

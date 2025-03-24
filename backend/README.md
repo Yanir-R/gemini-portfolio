@@ -1,8 +1,16 @@
-# FastAPI Gemini AI Backend
+# AI Portfolio Backend
 
-## Overview
+This is the backend service for the AI Portfolio application, built with FastAPI and Python.
 
-Backend service for the AI chat application, handling document processing and Gemini AI integration.
+## Project Structure
+
+├── docs/ # Documentation files
+│ └── private/ # Private markdown files (resume, about-me)
+├── main.py # Main FastAPI application
+├── gemini_helper.py # Gemini AI integration
+├── docs_helper.py # Documentation handling
+├── requirements.txt # Python dependencies
+└── Dockerfile # Container configuration
 
 ## Technical Stack
 
@@ -16,10 +24,10 @@ Backend service for the AI chat application, handling document processing and Ge
 
 ### Health Check
 
-`GET /`
+`GET /health`
 
 ```json
-{ "message": "FastAPI is running" }
+{ "message": "FastAPI is running", "timestamp": "2023-04-01T12:00:00" }
 ```
 
 ### Document System Check
@@ -29,9 +37,7 @@ Backend service for the AI chat application, handling document processing and Ge
 ```json
 {
     "private_files": ["resume.md", "about-me.md"],
-    "template_files": ["resume.md", "about-me.md"],
-    "private_exists": true,
-    "templates_exists": true
+    "private_exists": true
 }
 ```
 
@@ -46,7 +52,6 @@ Backend service for the AI chat application, handling document processing and Ge
 ```
 
 -   Retrieves content of specific markdown files
--   Checks private directory first, then falls back to templates
 
 ### Chat Endpoints
 
@@ -83,10 +88,9 @@ Backend service for the AI chat application, handling document processing and Ge
 
 ## Document Processing
 
-The backend handles two types of document locations:
+The backend handles documents in the following location:
 
 -   `/docs/private/`: Personal documents (gitignored)
--   `/docs/templates/`: Public templates
 
 ### Supported Formats
 
@@ -95,45 +99,65 @@ The backend handles two types of document locations:
 
 ### Processing Logic
 
-1. Attempts to read from private directory first
-2. Falls back to templates if no private files exist
-3. Combines all document content for AI context
+1. Reads from private directory
+2. Combines all document content for AI context
 
-## Setup Instructions
+## Setup and Installation
 
-### 1. Environment Setup
+1. Create a virtual environment:
 
 ```bash
-# Create virtual environment
 python3 -m venv venv
-source venv/bin/activate  # Windows: .\venv\Scripts\activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
 
-# Install dependencies
+2. Install dependencies:
+
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Configuration
+3. Set up environment variables:
+   Create a `.env` file with:
 
-Create `.env` file:
+    ```
+    GEMINI_API_KEY=your_api_key_here
+    FRONTEND_PROD_URL=your_production_frontend_url
+    FRONTEND_DEV_URL=http://localhost:3000
+    FRONTEND_VITE_URL=http://localhost:5173
+    ```
 
-```bash
-GEMINI_API_KEY=your_api_key_here
-```
-
-### 3. Gemini Integration
-
-```bash
-# Copy template
-cp gemini_helper.template.py gemini_helper.py
-
-# Edit configuration as needed
-```
-
-### 4. Running the Server
+4. Run the development server:
 
 ```bash
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload
 ```
+
+## Deployment
+
+Deploy to Google Cloud Run:
+
+```bash
+gcloud run deploy backend \
+  --source . \
+  --platform managed \
+  --region me-west1 \
+  --allow-unauthenticated \
+  --set-env-vars GEMINI_API_KEY=your_api_key
+```
+
+## API Endpoints
+
+-   `GET /check-paths`: Verify documentation files
+-   `POST /chat-with-files`: Chat with AI about documentation
+-   `GET /api/content/{filename}`: Get markdown content
+-   `GET /health`: Health check endpoint that returns service status and timestamp
+
+## Documentation Structure
+
+The `docs/` directory contains:
+
+-   `private/`: Personal markdown files like resume and about-me (gitignored)
 
 ## Development Guidelines
 
@@ -147,7 +171,6 @@ uvicorn main:app --reload --port 8000
 
 -   Automatic file type detection
 -   Error recovery for corrupt files
--   Graceful fallback to templates
 
 ### Security
 
@@ -162,20 +185,25 @@ uvicorn main:app --reload --port 8000
 1. File Permission Errors
 
 ```bash
-chmod 755 ../docs
-chmod 644 ../docs/**/*.md
-chmod 644 ../docs/**/*.pdf
+chmod 755 docs
+chmod 644 docs/private/*.md
 ```
 
 2. Missing Directories
 
 ```bash
-mkdir -p ../docs/private ../docs/templates
-touch ../docs/private/.gitkeep ../docs/templates/.gitkeep
+mkdir -p docs/private
+touch docs/private/.gitkeep
 ```
 
 3. API Key Issues
 
--   Verify .env file exists
+-   Verify .env file exists with GEMINI_API_KEY
 -   Check API key validity
--   Ensure proper environment loading
+
+4. Cloud Run Issues
+
+-   Check Cloud Build logs: `gcloud builds list`
+-   Verify service status: `gcloud run services describe backend`
+-   Check service URL is accessible
+-   Verify environment variables are set correctly in Cloud Run

@@ -13,6 +13,10 @@ export default defineConfig({
         port: 3000,
         host: true,
     },
+    build: {
+        target: 'esnext',
+        sourcemap: false,
+    },
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src')

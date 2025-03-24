@@ -5,15 +5,16 @@ import axios from 'axios';
 
 export const chatService = {
     checkFiles: async () => {
-        const response = await apiClient.get(API_ENDPOINTS.CHECK_FILES);
-        return {
-            hasFiles: (
-                (response.data.private_files?.length > 0) ||
-                (response.data.template_files?.length > 0)
-            )
-        };
+        try {
+            const response = await apiClient.get(API_ENDPOINTS.CHECK_FILES);
+            return {
+                hasFiles: (response.data.private_files?.length > 0)
+            };
+        } catch (error) {
+            console.error('Error checking files:', error);
+            return { hasFiles: false };
+        }
     },
-
     sendMessage: async (message: string, conversationHistory: ChatMessage[]) => {
         try {
             const response = await apiClient.post(API_ENDPOINTS.CHAT, {
