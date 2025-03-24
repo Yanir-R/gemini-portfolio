@@ -1,0 +1,86 @@
+name: Frontend Deploy
+
+on:
+  push:
+    branches: [main, prod]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-deploy.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "frontend/**"
+
+env:
+  FRONTEND_DIR: frontend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up environment variables
+        id: env
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/prod' ]]; then
+            echo "ENVIRONMENT=production" >> $GITHUB_ENV
+            echo "GCP_PROJECT=${{ secrets.GCP_PROD_PROJECT_ID }}" >> $GITHUB_ENV
+            echo "SERVICE_NAME=frontend" >> $GITHUB_ENV
+            echo "REGION=${{ secrets.GCP_REGION }}" >> $GITHUB_ENV
+          else
+            echo "ENVIRONMENT=development" >> $GITHUB_ENV
+            echo "GCP_PROJECT=${{ secrets.GCP_DEV_PROJECT_ID }}" >> $GITHUB_ENV
+            echo "SERVICE_NAME=frontend-dev" >> $GITHUB_ENV
+            echo "REGION=${{ secrets.GCP_REGION }}" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm ci
+
+      - name: Build
+        working-directory: ${{ env.FRONTEND_DIR }}
+        env:
+          VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL }}
+          VITE_ENV: ${{ env.ENVIRONMENT }}
+        run: npm run build
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          source: ${{ env.FRONTEND_DIR }}
+          region: ${{ env.REGION }}
+          env_vars: |
+            VITE_ENV=${{ env.ENVIRONMENT }}
+            VITE_BACKEND_URL=${{ secrets.VITE_BACKEND_URL }}
+
+      - name: Map Custom Domain
+        if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/main'
+        run: |
+          DOMAIN="${{ github.ref == 'refs/heads/prod' && secrets.PROD_DOMAIN || secrets.DEV_DOMAIN }}"
+          gcloud beta run domain-mappings create \
+            --service ${{ env.SERVICE_NAME }} \
+            --domain $DOMAIN \
+            --region ${{ env.REGION }}
