@@ -1,4 +1,7 @@
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+const isDevelopment = import.meta.env.MODE === 'development';
+const BASE_URL = isDevelopment
+    ? 'http://localhost:8000'
+    : 'https://backend-240663900746.me-west1.run.app';
 
 export const API_ENDPOINTS = {
     CHECK_FILES: `${BASE_URL}/check-paths`,

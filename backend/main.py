@@ -11,11 +11,18 @@ import datetime
 
 load_dotenv()
 
-FRONTEND_PROD_URL = getenv("FRONTEND_PROD_URL")
-FRONTEND_DEV_URL = getenv("FRONTEND_DEV_URL")
-FRONTEND_VITE_URL = getenv("FRONTEND_VITE_URL")
+FRONTEND_PROD_URL = getenv("FRONTEND_PROD_URL", "https://frontend-240663900746.me-west1.run.app")
+FRONTEND_DEV_URL = getenv("FRONTEND_DEV_URL", "http://localhost:3000")
+FRONTEND_VITE_URL = getenv("FRONTEND_VITE_URL", "http://127.0.0.1:3000")
+BACKEND_URL = getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
-allowed_origins = [url for url in [FRONTEND_PROD_URL, FRONTEND_DEV_URL, FRONTEND_VITE_URL] if url]
+allowed_origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://frontend-240663900746.me-west1.run.app"
+]
 
 class ChatMessage(BaseModel):
     type: str

@@ -7,7 +7,6 @@ export const chatService = {
     checkFiles: async () => {
         try {
             const response = await apiClient.get(API_ENDPOINTS.CHECK_FILES);
-            console.log('Check files response:', response.data);
             return {
                 hasFiles: (response.data.private_files?.length > 0),
                 paths: {
@@ -21,7 +20,7 @@ export const chatService = {
             };
         } catch (error) {
             console.error('Error checking files:', error);
-            if (error.response) {
+            if (axios.isAxiosError(error) && error.response) {
                 console.error('Error response:', {
                     status: error.response.status,
                     data: error.response.data,
@@ -30,7 +29,7 @@ export const chatService = {
             }
             return {
                 hasFiles: false,
-                error: error.response?.status === 404 ? 'Path not found' : 'Server error'
+                error: axios.isAxiosError(error) ? error.message : 'An unknown error occurred'
             };
         }
     },
