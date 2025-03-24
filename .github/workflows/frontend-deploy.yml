@@ -29,15 +29,10 @@ jobs:
         run: |
           if [[ ${{ github.ref }} == 'refs/heads/prod' ]]; then
             echo "ENVIRONMENT=production" >> $GITHUB_ENV
-            echo "GCP_PROJECT=${{ secrets.GCP_PROD_PROJECT_ID }}" >> $GITHUB_ENV
-            echo "SERVICE_NAME=frontend" >> $GITHUB_ENV
-            echo "REGION=${{ secrets.GCP_REGION }}" >> $GITHUB_ENV
           else
             echo "ENVIRONMENT=development" >> $GITHUB_ENV
-            echo "GCP_PROJECT=${{ secrets.GCP_DEV_PROJECT_ID }}" >> $GITHUB_ENV
-            echo "SERVICE_NAME=frontend" >> $GITHUB_ENV
-            echo "REGION=${{ secrets.GCP_REGION }}" >> $GITHUB_ENV
           fi
+          echo "GCP_PROJECT=${{ secrets.GCP_DEV_PROJECT_ID }}" >> $GITHUB_ENV
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -57,81 +52,6 @@ jobs:
           VITE_ENV: ${{ env.ENVIRONMENT }}
         run: npm run build
 
-      - name: Prepare for deployment
-        working-directory: ${{ env.FRONTEND_DIR }}
-        run: |
-          # Create nginx.conf if it doesn't exist
-          cat > nginx.conf << 'EOL'
-          server {
-              listen 80;
-              server_name _;
-              root /usr/share/nginx/html;
-              index index.html;
-
-              location / {
-                  try_files $uri $uri/ /index.html;
-                  add_header Cache-Control "no-cache";
-              }
-
-              location /assets {
-                  expires 1y;
-                  add_header Cache-Control "public";
-              }
-
-              location /health {
-                  access_log off;
-                  return 200 'OK';
-                  add_header Content-Type text/plain;
-              }
-          }
-          EOL
-
-          # Create Dockerfile if it doesn't exist
-          cat > Dockerfile << 'EOL'
-          FROM node:20-alpine as builder
-          WORKDIR /app
-          COPY package*.json ./
-          RUN npm ci
-          COPY . .
-          RUN npm run build
-
-          FROM nginx:alpine
-          COPY --from=builder /app/dist /usr/share/nginx/html
-          COPY nginx.conf /etc/nginx/conf.d/default.conf
-          EXPOSE 80
-          CMD ["nginx", "-g", "daemon off;"]
-          EOL
-
-          # Create .gcloudignore
-          cat > .gcloudignore << EOL
-          .git
-          .gitignore
-          node_modules
-          README.md
-          .env*
-          .vscode
-          .github
-          # Include important files
-          !src/**
-          !public/**
-          !index.html
-          !package.json
-          !package-lock.json
-          !tsconfig.json
-          !vite.config.ts
-          !tailwind.config.js
-          !Dockerfile
-          !nginx.conf
-          EOL
-
-          # Verify files exist
-          echo "Checking for required files:"
-          ls -la Dockerfile nginx.conf
-
-          # Verify files to be uploaded
-          echo "Files to be uploaded:"
-          gcloud meta list-files-for-upload
-
       - name: Google Auth
         uses: google-github-actions/auth@v2
         with:
@@ -141,23 +61,10 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Setup Artifact Registry
-        run: |
-          gcloud artifacts repositories create cloud-run-source-deploy \
-            --repository-format=docker \
-            --location=me-west1 \
-            --project=${{ env.GCP_PROJECT }} || true
-
       - name: Deploy to Cloud Run
         id: deploy
         run: |
           echo "Starting deployment process..."
-          echo "Current directory: $(pwd)"
-          echo "Service name: frontend"
-          echo "Project ID: ${{ env.GCP_PROJECT }}"
-
-          # Clean any potential cached builds
-          rm -rf ${{ env.FRONTEND_DIR }}/.gcloud || true
 
           # Build and deploy in one step
           gcloud run deploy frontend \
@@ -176,24 +83,11 @@ jobs:
             --labels="managed-by=github-actions,commit-sha=${{ github.sha }}" \
             --quiet
 
-      # Add error logging
-      - name: Log Build Info on Failure
-        if: failure()
-        run: |
-          echo "Checking recent builds..."
-          gcloud builds list --region me-west1 --limit 1
-
-          echo "Getting latest build logs..."
-          BUILD_ID=$(gcloud builds list --region me-west1 --format="value(id)" --limit=1)
-          if [ ! -z "$BUILD_ID" ]; then
-            gcloud builds log $BUILD_ID --region me-west1
-          fi
-
       - name: Map Custom Domain
         if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/main'
         run: |
           DOMAIN="${{ github.ref == 'refs/heads/prod' && secrets.PROD_DOMAIN || secrets.DEV_DOMAIN }}"
           gcloud beta run domain-mappings create \
-            --service ${{ env.SERVICE_NAME }} \
+            --service frontend \
             --domain $DOMAIN \
             --region me-west1 || echo "Domain mapping failed but continuing deployment"
