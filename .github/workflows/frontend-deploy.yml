@@ -61,14 +61,56 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Prepare deployment files
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: |
+          # Create nginx.conf
+          cat > nginx.conf << 'EOL'
+          server {
+              listen 80;
+              server_name _;
+              root /usr/share/nginx/html;
+              index index.html;
+              location / {
+                  try_files $uri $uri/ /index.html;
+                  add_header Cache-Control "no-cache";
+              }
+              location /assets {
+                  expires 1y;
+                  add_header Cache-Control "public";
+              }
+          }
+          EOL
+
+          # Create Dockerfile
+          cat > Dockerfile << 'EOL'
+          FROM node:20-alpine as builder
+          WORKDIR /app
+          COPY package*.json ./
+          RUN npm ci
+          COPY . .
+          RUN npm run build
+
+          FROM nginx:alpine
+          COPY --from=builder /app/dist /usr/share/nginx/html
+          COPY nginx.conf /etc/nginx/conf.d/default.conf
+          EXPOSE 80
+          CMD ["nginx", "-g", "daemon off;"]
+          EOL
+
+          # Verify files
+          echo "Created deployment files:"
+          ls -la Dockerfile nginx.conf
+
       - name: Deploy to Cloud Run
         id: deploy
         run: |
           echo "Starting deployment process..."
+          cd ${{ env.FRONTEND_DIR }}  # Change to frontend directory first
 
-          # Build and deploy in one step
+          # Build and deploy
           gcloud run deploy frontend \
-            --source ${{ env.FRONTEND_DIR }} \
+            --source . \  # Use . since we're already in frontend directory
             --platform managed \
             --region me-west1 \
             --project ${{ env.GCP_PROJECT }} \
