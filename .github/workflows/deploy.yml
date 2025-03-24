@@ -1,4 +1,0 @@
-env:
-  DEV_DOMAIN: ${{ secrets.DEV_DOMAIN }}
-  PROD_DOMAIN: ${{ secrets.PROD_DOMAIN }}
-  VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL }}
