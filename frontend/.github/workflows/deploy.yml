@@ -1,0 +1,67 @@
+name: Deploy Application
+
+on:
+  push:
+    branches:
+      - main
+      - prod
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up environment variables
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/prod' ]]; then
+            echo "ENVIRONMENT=production" >> $GITHUB_ENV
+            echo "GCP_PROJECT=your-prod-project" >> $GITHUB_ENV
+          else
+            echo "ENVIRONMENT=development" >> $GITHUB_ENV
+            echo "GCP_PROJECT=your-dev-project" >> $GITHUB_ENV
+          fi
+
+      - name: Setup Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          project_id: ${{ env.GCP_PROJECT }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Build and Deploy
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/prod' ]]; then
+            # Production deployment
+            gcloud run deploy frontend-service \
+              --source . \
+              --platform managed \
+              --region us-central1 \
+              --allow-unauthenticated \
+              --set-env-vars="ENVIRONMENT=production,API_URL=${{ secrets.PROD_API_URL }}"
+          elif [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            # Development deployment
+            gcloud run deploy frontend-service-dev \
+              --source . \
+              --platform managed \
+              --region us-central1 \
+              --allow-unauthenticated \
+              --set-env-vars="ENVIRONMENT=development,API_URL=${{ secrets.DEV_API_URL }}"
+          fi
+
+      - name: Map Custom Domain
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/prod' ]]; then
+            gcloud beta run domain-mappings create \
+              --service frontend-service \
+              --domain app.example.com \
+              --region us-central1
+          elif [[ ${{ github.ref }} == 'refs/heads/main' ]]; then
+            gcloud beta run domain-mappings create \
+              --service frontend-service-dev \
+              --domain dev.example.com \
+              --region us-central1
+          fi

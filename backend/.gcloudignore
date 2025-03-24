@@ -1,0 +1,22 @@
+# Exclude version control
+.git
+.gitignore
+
+# Exclude node modules (will be installed during build)
+node_modules/
+
+# Exclude development files
+.env.local
+.env.*.local
+*.log
+
+# Include necessary files
+!package.json
+!package-lock.json
+!tsconfig.json
+
+# Include source code
+!src/
+
+# Include the gcloudignore itself
+!.gcloudignore 

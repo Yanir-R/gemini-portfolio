@@ -1,0 +1,45 @@
+steps:
+  # Grant permissions to workspace
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - a+w
+      - /workspace
+    entrypoint: chmod
+
+  # Use crane to download the image
+  - name: gcr.io/go-containerregistry/crane
+    args:
+      - pull
+      - "python:3.9-slim"
+      - /workspace/image.tar
+
+  # Load the image
+  - name: gcr.io/cloud-builders/docker
+    args: [load, --input, "/workspace/image.tar"]
+
+  # Build the container image
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-t", "gcr.io/$PROJECT_ID/backend", "."]
+
+  # Push the container image to Container Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["push", "gcr.io/$PROJECT_ID/backend"]
+
+  # Deploy container image to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      - "run"
+      - "deploy"
+      - "backend"
+      - "--image"
+      - "gcr.io/$PROJECT_ID/backend"
+      - "--region"
+      - "me-west1"
+      - "--platform"
+      - "managed"
+      - "--allow-unauthenticated"
+
+timeout: "1800s"
+images:
+  - "gcr.io/$PROJECT_ID/backend"

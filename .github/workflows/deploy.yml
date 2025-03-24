@@ -1,0 +1,95 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main, prod]
+  pull_request:
+    branches: [main, prod]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set environment variables
+        id: env
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/prod' ]]; then
+            echo "ENV_SUFFIX=-prod" >> $GITHUB_OUTPUT
+            echo "ENVIRONMENT=production" >> $GITHUB_OUTPUT
+          else
+            echo "ENV_SUFFIX=-dev" >> $GITHUB_OUTPUT
+            echo "ENVIRONMENT=development" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev
+
+      - name: Deploy Backend
+        run: |
+          # Create .gcloudignore if it doesn't exist
+          echo "# Exclude everything by default" > backend/.gcloudignore
+          echo "!src/**" >> backend/.gcloudignore
+          echo "!package.json" >> backend/.gcloudignore
+          echo "!package-lock.json" >> backend/.gcloudignore
+          echo "!tsconfig.json" >> backend/.gcloudignore
+
+          # Verify files to be uploaded
+          cd backend && gcloud meta list-files-for-upload
+
+          gcloud run deploy backend${{ steps.env.outputs.ENV_SUFFIX }} \
+            --source ./backend \
+            --platform managed \
+            --region me-west1 \
+            --allow-unauthenticated \
+            --memory 512Mi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 3 \
+            --service-account=${{ secrets.GCP_SA_EMAIL }} \
+            --ingress=all \
+            --execution-environment=gen2 \
+            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},ENVIRONMENT=${{ steps.env.outputs.ENVIRONMENT }}"
+
+      - name: Get Backend URL
+        id: backend-url
+        run: |
+          BACKEND_URL=$(gcloud run services describe backend${{ steps.env.outputs.ENV_SUFFIX }} --region me-west1 --format='value(status.url)')
+          echo "BACKEND_URL=${BACKEND_URL}" >> $GITHUB_OUTPUT
+
+      - name: Deploy Frontend
+        run: |
+          gcloud run deploy frontend${{ steps.env.outputs.ENV_SUFFIX }} \
+            --source ./frontend \
+            --platform managed \
+            --region me-west1 \
+            --allow-unauthenticated \
+            --memory 256Mi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 3 \
+            --set-env-vars=VITE_ENV=${{ steps.env.outputs.ENVIRONMENT }},VITE_BACKEND_URL=${{ steps.backend-url.outputs.BACKEND_URL }}
+
+      - name: Map Custom Domain
+        if: github.ref == 'refs/heads/prod'
+        run: |
+          gcloud beta run domain-mappings create \
+            --service frontend-prod \
+            --domain ${{ secrets.PROD_DOMAIN }} \
+            --region ${{ secrets.GCP_REGION }}

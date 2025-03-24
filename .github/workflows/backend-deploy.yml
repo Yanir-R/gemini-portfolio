@@ -1,0 +1,121 @@
+name: Backend Deploy v2
+
+on:
+  push:
+    branches: [main, prod]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-deploy.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+
+env:
+  BACKEND_DIR: backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up environment variables
+        id: env
+        run: |
+          if [[ ${{ github.ref }} == 'refs/heads/prod' ]]; then
+            echo "ENVIRONMENT=production" >> $GITHUB_ENV
+          else
+            echo "ENVIRONMENT=development" >> $GITHUB_ENV
+          fi
+          echo "GCP_PROJECT=${{ secrets.GCP_DEV_PROJECT_ID }}" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: ${{ env.BACKEND_DIR }}/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: npm ci
+
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Prepare deployment files
+        working-directory: ${{ env.BACKEND_DIR }}
+        run: |
+          # Create Dockerfile for Node.js backend
+          cat > Dockerfile << 'EOL'
+          FROM node:20-alpine
+          WORKDIR /app
+          COPY package*.json ./
+          RUN npm ci
+          COPY . .
+          ENV NODE_ENV=production
+          EXPOSE 8080
+          CMD ["npm", "start"]
+          EOL
+
+          # Create .gcloudignore
+          cat > .gcloudignore << 'EOL'
+          .git
+          .gitignore
+          node_modules
+          README.md
+          .env*
+          .vscode
+          .github
+          !src/**
+          !package.json
+          !package-lock.json
+          !tsconfig.json
+          !Dockerfile
+          EOL
+
+          # Verify files
+          echo "Checking for required files:"
+          ls -la Dockerfile
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        run: |
+          echo "Starting deployment process..."
+          cd ${{ env.BACKEND_DIR }}
+
+          gcloud run deploy backend \
+            --source . \
+            --platform managed \
+            --region me-west1 \
+            --project ${{ env.GCP_PROJECT }} \
+            --allow-unauthenticated \
+            --port=8080 \
+            --min-instances=0 \
+            --max-instances=4 \
+            --memory=512Mi \
+            --timeout=300 \
+            --service-account=${{ secrets.GCP_SA_EMAIL }} \
+            --set-env-vars="NODE_ENV=${{ env.ENVIRONMENT }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --labels="managed-by=github-actions,commit-sha=${{ github.sha }}" \
+            --quiet
+
+      - name: Map Custom Domain
+        if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/main'
+        run: |
+          DOMAIN="${{ github.ref == 'refs/heads/prod' && secrets.PROD_DOMAIN || secrets.DEV_DOMAIN }}"
+          gcloud beta run domain-mappings create \
+            --service backend \
+            --domain api.$DOMAIN \
+            --region me-west1 || echo "Domain mapping failed but continuing deployment"
