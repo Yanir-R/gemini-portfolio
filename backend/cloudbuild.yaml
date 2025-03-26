@@ -40,6 +40,19 @@ steps:
       - "managed"
       - "--allow-unauthenticated"
 
+  # Map custom domain
+  - name: "gcr.io/cloud-builders/gcloud"
+    args:
+      [
+        "run",
+        "domain-mappings",
+        "create",
+        "--service=$_SERVICE_NAME",
+        "--domain=$_DOMAIN",
+        "--region=$_REGION",
+        "--quiet",
+      ]
+
 timeout: "1800s"
 images:
   - "gcr.io/$PROJECT_ID/backend"

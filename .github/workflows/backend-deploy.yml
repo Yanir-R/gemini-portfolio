@@ -113,9 +113,16 @@ jobs:
             --memory=512Mi \
             --timeout=300 \
             --service-account=${{ secrets.GCP_SA_EMAIL }} \
-            --set-env-vars="ENVIRONMENT=${{ env.ENVIRONMENT }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
+            --set-env-vars="ENVIRONMENT=${{ env.ENVIRONMENT }},\
+                          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
+                          EMAIL_ADDRESS=${{ secrets.EMAIL_ADDRESS }},\
+                          EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }},\
+                          YOUR_EMAIL=${{ secrets.YOUR_EMAIL }}" \
             --labels="managed-by=github-actions,commit-sha=${{ github.sha }}" \
             --quiet
+
+      - name: Install Beta Components
+        run: gcloud components install beta --quiet
 
       - name: Map Custom Domain
         if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/main'
@@ -124,4 +131,5 @@ jobs:
           gcloud beta run domain-mappings create \
             --service backend \
             --domain api.$DOMAIN \
-            --region me-west1 || echo "Domain mapping failed but continuing deployment"
+            --region me-west1 \
+            --quiet || echo "Domain mapping failed but continuing deployment"
