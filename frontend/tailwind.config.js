@@ -101,10 +101,10 @@ module.exports = {
                 },
                 float: {
                     '0%, 100%': {
-                        transform: 'translateY(0)'
+                        transform: 'translateY(0) rotate(0deg)',
                     },
                     '50%': {
-                        transform: 'translateY(-5px)'
+                        transform: 'translateY(-3px) rotate(2deg)',
                     }
                 },
                 pulse: {
@@ -121,7 +121,7 @@ module.exports = {
             animation: {
                 fadeIn: 'fadeIn 0.3s ease-out forwards',
                 disco: 'disco 3s ease-in-out infinite',
-                float: 'float 3s ease-in-out infinite',
+                float: 'float 2s ease-in-out infinite',
                 pulse: 'pulse 2s ease-in-out infinite'
             },
         },

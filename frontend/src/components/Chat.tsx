@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MessageAvatar } from '@/components/MessageAvatar';
 import { useChat } from '@/hooks/useChat';
+import { QuickMessages } from '@/components/QuickMessages';
+import { QuickMessageOption } from '@/types/chat';
+import { FINAL_QUESTION } from '@/constants/chat';
 
 const Chat: React.FC = () => {
     const {
@@ -10,12 +13,32 @@ const Chat: React.FC = () => {
         hasFiles,
         chatHistory,
         handleSendMessage,
-        showQuickMessages
+        showQuickMessages,
+        quickMessageState
     } = useChat();
+
+    const [isTyping, setIsTyping] = useState(false);
+
+    const handleQuickMessageSelect = async (
+        message: string,
+        nextQuestions?: QuickMessageOption[],
+    ) => {
+        await handleSendMessage(message, nextQuestions);
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setMessage(e.target.value);
+        setIsTyping(true);
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        handleSendMessage();
+        handleSendMessage(message);
+        setIsTyping(false);
+    };
+
+    const handleEnvelopeClick = () => {
+        handleQuickMessageSelect(FINAL_QUESTION.message, undefined, true);
     };
 
     return (
@@ -59,6 +82,27 @@ const Chat: React.FC = () => {
                         <div className="flex gap-3 items-center px-4 py-1.5 rounded-full bg-[#1c1d29]/50 border border-border">
                             <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e] shadow-lg shadow-[#22c55e]/30 animate-pulse"></span>
                             <span className="text-sm font-medium text-gray-300 pointer-events-none">Online</span>
+                            <button
+                                onClick={handleEnvelopeClick}
+                                className="group ml-2 p-1.5 rounded-full 
+                                    hover:bg-brand-purple/10 
+                                    transition-all duration-300 ease-out"
+                                aria-label="Contact me"
+                            >
+                                <svg 
+                                    className="w-4 h-4 transition-all duration-300 transform text-brand-purple/80 group-hover:scale-110 group-hover:text-brand-purple animate-float"
+                                    fill="none" 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path 
+                                        strokeLinecap="round" 
+                                        strokeLinejoin="round" 
+                                        strokeWidth={2} 
+                                        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                                    />
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -102,116 +146,21 @@ const Chat: React.FC = () => {
                 )}
             </div>
 
-            {/* Quick Message Boxes */}
-            {showQuickMessages && (
-                <div className="flex flex-col sm:flex-row gap-3 px-4 sm:px-6 py-3 sm:py-4 w-full bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-t border-border
-                    animate-fadeIn">
-                    <button
-                        onClick={() => handleSendMessage("Tell me about your experience")}
-                        className="flex-1 group relative flex items-center gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl w-full
-                            bg-gradient-to-br from-[#1c1d29] to-[#1c1d29]/80
-                            overflow-hidden
-                            transform hover:-translate-y-1 active:translate-y-0
-                            transition-all duration-300 ease-out"
-                        disabled={isLoading}
-                    >
-                        {/* Animated Background */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-brand-purple/0 via-[#b65eff]/10 to-[#9d4edd]/0 
-                            translate-x-[-100%] group-hover:translate-x-[100%] 
-                            transition-transform duration-1000 ease-in-out"></div>
-
-                        {/* Border Gradient */}
-                        <div className="absolute inset-[1px] rounded-xl bg-[#1c1d29]
-                            before:absolute before:inset-0 before:rounded-xl before:p-[1px]
-                            before:bg-gradient-to-r before:from-transparent before:via-[#9d4edd]/50 before:to-transparent
-                            before:opacity-0 before:group-hover:opacity-100
-                            before:transition-opacity before:duration-500"></div>
-
-                        {/* Icon Container */}
-                        <div className="relative flex justify-center items-center w-8 sm:w-10 h-8 sm:h-10 rounded-lg
-                            bg-gradient-to-br from-brand-purple/10 to-[#7b2cbf]/10
-                            border border-[#9d4edd]/20 group-hover:border-[#9d4edd]/40
-                            shadow-lg shadow-[#9d4edd]/5 group-hover:shadow-[#9d4edd]/20
-                            transition-all duration-300">
-                            <span className="text-lg transition-transform duration-300 sm:text-xl group-hover:scale-110">💼</span>
-                        </div>
-
-                        {/* Text Content */}
-                        <div className="relative flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate transition-colors duration-300 sm:text-base text-white/90 group-hover:text-white">Experience</p>
-                            <p className="text-xs text-gray-400 truncate transition-colors duration-300 sm:text-sm group-hover:text-gray-300">Learn about my journey</p>
-                        </div>
-
-                        {/* Hover Arrow - Hide on mobile */}
-                        <svg
-                            className="hidden sm:block w-5 h-5 text-[#9d4edd]/50 group-hover:text-[#9d4edd] 
-                                transform translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100
-                                transition-all duration-300"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                    </button>
-
-                    <button
-                        onClick={() => handleSendMessage("What are your main skills?")}
-                        className="flex-1 group relative flex items-center gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl w-full
-                            bg-gradient-to-br from-[#1c1d29] to-[#1c1d29]/80
-                            overflow-hidden
-                            transform hover:-translate-y-1 active:translate-y-0
-                            transition-all duration-300 ease-out"
-                        disabled={isLoading}
-                    >
-                        {/* Animated Background */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-brand-purple/0 via-[#b65eff]/10 to-[#9d4edd]/0 
-                            translate-x-[-100%] group-hover:translate-x-[100%] 
-                            transition-transform duration-1000 ease-in-out"></div>
-
-                        {/* Border Gradient */}
-                        <div className="absolute inset-[1px] rounded-xl bg-[#1c1d29]
-                            before:absolute before:inset-0 before:rounded-xl before:p-[1px]
-                            before:bg-gradient-to-r before:from-transparent before:via-[#9d4edd]/50 before:to-transparent
-                            before:opacity-0 before:group-hover:opacity-100
-                            before:transition-opacity before:duration-500"></div>
-
-                        {/* Icon Container */}
-                        <div className="relative flex justify-center items-center w-8 sm:w-10 h-8 sm:h-10 rounded-lg
-                            bg-gradient-to-br from-brand-purple/10 to-[#7b2cbf]/10
-                            border border-[#9d4edd]/20 group-hover:border-[#9d4edd]/40
-                            shadow-lg shadow-[#9d4edd]/5 group-hover:shadow-[#9d4edd]/20
-                            transition-all duration-300">
-                            <span className="text-lg transition-transform duration-300 sm:text-xl group-hover:scale-110">🎯</span>
-                        </div>
-
-                        {/* Text Content */}
-                        <div className="relative flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate transition-colors duration-300 sm:text-base text-white/90 group-hover:text-white">Skills</p>
-                            <p className="text-xs text-gray-400 truncate transition-colors duration-300 sm:text-sm group-hover:text-gray-300">Discover my expertise</p>
-                        </div>
-
-                        {/* Hover Arrow - Hide on mobile */}
-                        <svg
-                            className="hidden sm:block w-5 h-5 text-[#9d4edd]/50 group-hover:text-[#9d4edd] 
-                                transform translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100
-                                transition-all duration-300"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                    </button>
-                </div>
-            )}
+            <QuickMessages
+                show={showQuickMessages && quickMessageState.currentQuestions.length > 0}
+                isLoading={isLoading}
+                onMessageSelect={handleQuickMessageSelect}
+                currentQuestions={quickMessageState.currentQuestions}
+                questionLevel={quickMessageState.level}
+                hideOnType={isTyping}
+            />
 
             <form onSubmit={handleSubmit} className="p-3 sm:p-4 bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-t border-border">
                 <div className="relative">
                     <input
                         type="text"
                         value={message}
-                        onChange={(e) => setMessage(e.target.value)}
+                        onChange={handleInputChange}
                         placeholder={
                             !hasFiles
                                 ? "⚠️ No files available"

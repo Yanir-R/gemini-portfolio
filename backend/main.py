@@ -3,13 +3,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from gemini_helper import get_gemini_response
 from docs_helper import load_all_files, read_markdown_file, DOCS_DIR, PRIVATE_DIR
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 import os
 from os import getenv
 import datetime
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import smtplib
+import json
+import logging
+import re
+from email_validator import validate_email, EmailNotValidError
 
 load_dotenv()
+
+def validate_email_config():
+    required_vars = ["EMAIL_ADDRESS", "EMAIL_PASSWORD", "YOUR_EMAIL"]
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    
+    if missing_vars:
+        logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+        return False
+    return True
+
+if not validate_email_config():
+    logger.warning("Email configuration is incomplete. Email functionality will not work!")
 
 FRONTEND_PROD_URL = getenv("FRONTEND_PROD_URL", "https://frontend-240663900746.me-west1.run.app")
 FRONTEND_DEV_URL = getenv("FRONTEND_DEV_URL", "http://localhost:3000")
@@ -18,6 +37,7 @@ BACKEND_URL = getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
 allowed_origins = [
     "http://localhost:3000",
+    "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -27,10 +47,17 @@ allowed_origins = [
 class ChatMessage(BaseModel):
     type: str
     content: str
+    is_email_collection: Optional[bool] = False
+    email_collected: Optional[bool] = False
 
 class ChatRequest(BaseModel):
     message: str
     conversation_history: Optional[List[ChatMessage]] = None
+    collected_email: Optional[EmailStr] = None
+
+class ContactRequest(BaseModel):
+    email: str
+    message: str
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
@@ -43,6 +70,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @app.get("/")
 @app.get("/health")
@@ -81,6 +111,7 @@ async def chat(chat_request: ChatRequest):
 
 @app.post("/chat-with-files")
 async def chat_with_files(chat_request: ChatRequest):
+    logger.info(f"Received chat request: {chat_request}")
     try:
         if not GEMINI_API_KEY:
             raise HTTPException(
@@ -88,18 +119,76 @@ async def chat_with_files(chat_request: ChatRequest):
                 detail="GEMINI_API_KEY not found in environment variables"
             )
         
-        all_content = load_all_files()
+        # Check if we're in email collection mode
+        in_email_collection = any(
+            msg.is_email_collection and not msg.email_collected
+            for msg in (chat_request.conversation_history or [])[-2:]
+        )
+
+        if in_email_collection:
+            # Extract email using regex
+            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+            email_match = re.search(email_pattern, chat_request.message)
+            
+            if email_match:
+                try:
+                    email = email_match.group(0)
+                    valid = validate_email(email)
+                    email = valid.email
+                    
+                    message_content = chat_request.message.replace(email, '').strip()
+                    if not message_content:
+                        message_content = "Email provided during chat interaction"
+                    
+                    contact_request = ContactRequest(
+                        email=email,
+                        message=message_content
+                    )
+                    
+                    await contact(contact_request)
+                    logger.info(f"Email sent successfully for {email}")
+                    
+                    return {
+                        "response": "Thanks! I've received your email. Feel free to ask me anything else!",
+                        "email_collected": True,
+                        "is_email_collection": False
+                    }
+                except EmailNotValidError:
+                    return {
+                        "response": "That doesn't look like a valid email address. Could you please try again?",
+                        "email_collected": False,
+                        "is_email_collection": True
+                    }
+
+        # Check if this is a new email collection request
+        should_collect_email = (
+            not any(msg.email_collected for msg in chat_request.conversation_history or []) and
+            ("contact" in chat_request.message.lower() or 
+             "email" in chat_request.message.lower() or
+             "newsletter" in chat_request.message.lower())
+        )
         
-        # Convert conversation history to a format Gemini can use
+        if should_collect_email:
+            return {
+                "response": "I'd be happy to help with that! Could you please share your email address and a brief message about what you'd like to discuss? I'm looking forward to connecting with you!",
+                "is_email_collection": True,
+                "email_collected": False
+            }
+        
+        # Normal chat flow
+        all_content = load_all_files()
         history = []
         if chat_request.conversation_history:
             history = [
-                {"role": "user" if msg.type == "user" else "assistant", 
-                 "content": msg.content} 
+                {
+                    "role": "user" if msg.type == "user" else "assistant",
+                    "content": msg.content,
+                    "is_email_collection": msg.is_email_collection,
+                    "email_collected": msg.email_collected
+                }
                 for msg in chat_request.conversation_history
             ]
         
-        # Get response from Gemini
         response = get_gemini_response(
             GEMINI_API_KEY,
             chat_request.message,
@@ -110,7 +199,7 @@ async def chat_with_files(chat_request: ChatRequest):
         return {"response": response}
         
     except Exception as e:
-        print(f"Error in chat_with_files: {str(e)}")
+        logger.error(f"Error in chat_with_files: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/content/{file_name}")
@@ -124,3 +213,79 @@ async def get_content(file_name: str):
         return {"content": content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/contact")
+async def contact(request: ContactRequest):
+    try:
+        # Email configuration
+        sender_email = os.getenv("EMAIL_ADDRESS")
+        sender_password = os.getenv("EMAIL_PASSWORD")
+        receiver_email = os.getenv("YOUR_EMAIL")
+
+        logger.info(f"Attempting to send email from {sender_email} to {receiver_email}")
+
+        if not all([sender_email, sender_password, receiver_email]):
+            logger.error("Missing email configuration")
+            raise HTTPException(
+                status_code=500,
+                detail="Email configuration is incomplete"
+            )
+
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = receiver_email
+        msg['Subject'] = "New Contact from Portfolio Chat"
+
+        body = f"""
+        New contact request from your portfolio chat!
+        
+        User Email: {request.email}
+        Message: {request.message}
+        Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        """
+
+        msg.attach(MIMEText(body, 'plain'))
+
+        try:
+            # Send email with explicit logging
+            logger.info("Attempting to connect to SMTP server...")
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                logger.info("Connected to SMTP server, attempting login...")
+                server.login(sender_email, sender_password)
+                logger.info("Logged in successfully, sending email...")
+                server.send_message(msg)
+                logger.info(f"Email sent successfully to {receiver_email}")
+        except Exception as e:
+            logger.error(f"SMTP Error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to send email: {str(e)}"
+            )
+
+        # Log the collected email
+        log_collected_email(str(request.email), request.message)
+
+        return {"status": "success", "message": "Email sent successfully"}
+    except Exception as e:
+        logger.error(f"Contact endpoint error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Add this function to handle email logging
+def log_collected_email(email: str, context: str):
+    try:
+        log_entry = {
+            "email": email,
+            "timestamp": datetime.now().isoformat(),
+            "context": context
+        }
+        
+        with open("collected_emails.json", "a") as f:
+            json.dump(log_entry, f)
+            f.write("\n")
+            
+        logger.info(f"Email collected: {email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to log email: {str(e)}")
+        return False
