@@ -38,7 +38,7 @@ const Chat: React.FC = () => {
     };
 
     const handleEnvelopeClick = () => {
-        handleQuickMessageSelect(FINAL_QUESTION.message, undefined, true);
+        handleQuickMessageSelect(FINAL_QUESTION.message, undefined);
     };
 
     return (

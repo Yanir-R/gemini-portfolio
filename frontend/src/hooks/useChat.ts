@@ -85,10 +85,10 @@ export const useChat = () => {
 
         // Hide quick messages permanently if it's a free-form message or final question
         if (!messageText || isEmailRelated) {
-            setQuickMessageState(prev => ({
+            setQuickMessageState({
                 currentQuestions: [],
                 level: 3 // Level 3 means we're done with quick messages
-            }));
+            });
         } else {
             // Update to next level of questions
             updateQuickMessages(nextQuestions);

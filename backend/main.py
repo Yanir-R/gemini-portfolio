@@ -16,6 +16,9 @@ import logging
 import re
 from email_validator import validate_email, EmailNotValidError
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 def validate_email_config():
@@ -70,9 +73,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 @app.get("/")
 @app.get("/health")
