@@ -102,7 +102,7 @@ export const QuickMessages: React.FC<QuickMessagesProps> = ({
     const isFinalQuestion = questionLevel === 2;
 
     return (
-        <div className={`flex flex-col sm:flex-row gap-3 px-4 sm:px-6 py-3 sm:py-4 w-full 
+        <div className={`flex flex-col sm:flex-row gap-2 sm:gap-3 px-3 sm:px-6 py-2 sm:py-4 w-full 
             bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-t border-border
             ${hideOnType ? 'animate-fadeOut' : 'animate-fadeIn'}
             ${isFinalQuestion ? 'justify-center' : ''}`}>
@@ -116,7 +116,7 @@ export const QuickMessages: React.FC<QuickMessagesProps> = ({
                     nextQuestions={question.nextQuestions}
                     onClick={onMessageSelect}
                     disabled={isLoading}
-                    className={isFinalQuestion ? 'w-full sm:max-w-md' : 'flex-1'}
+                    className={`${isFinalQuestion ? 'w-full sm:max-w-md' : 'flex-1'} min-h-[60px] sm:min-h-[auto]`}
                 />
             ))}
         </div>

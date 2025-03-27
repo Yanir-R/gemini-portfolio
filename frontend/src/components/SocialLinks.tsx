@@ -54,7 +54,7 @@ const SocialLinks: React.FC<{ className?: string }> = ({ className = "" }) => {
                     }}
                 >
                     <svg
-                        className="w-5 h-5 transition-transform duration-200"
+                        className="w-6 h-6 transition-transform duration-200 sm:w-7 sm:h-7"
                         fill={link.label === "Email Contact" ? "none" : "currentColor"}
                         stroke={link.label === "Email Contact" ? "currentColor" : undefined}
                         viewBox="0 0 24 24"

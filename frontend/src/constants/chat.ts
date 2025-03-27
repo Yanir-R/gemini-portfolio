@@ -58,9 +58,9 @@ export const INITIAL_QUESTIONS: QuickMessageOption[] = [
 ] as const;
 
 export const FINAL_QUESTION: QuickMessageOption = {
-    icon: "👋",
-    title: "Let's Connect",
-    description: "I'd love to hear from you!",
-    message: "I'd love to stay in touch! I would like to send an email to you",
+    icon: "✉️",
+    title: "Send Me an Email",
+    description: "Let's connect via email",
+    message: "Hey! 👋\nI'd love to connect with you! Please share your email address and a brief message about what you'd like to discuss - whether it's a project collaboration, job opportunity, or just to connect. I'll make sure to get back to you soon! Looking forward to our conversation! 📧",
     isEmailRelated: true
 };

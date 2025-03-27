@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MessageAvatar } from '@/components/MessageAvatar';
 import { useChat } from '@/hooks/useChat';
 import { QuickMessages } from '@/components/QuickMessages';
@@ -18,6 +18,9 @@ const Chat: React.FC = () => {
     } = useChat();
 
     const [isTyping, setIsTyping] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+    const [showScrollButton, setShowScrollButton] = useState(false);
 
     const handleQuickMessageSelect = async (
         message: string,
@@ -41,11 +44,35 @@ const Chat: React.FC = () => {
         handleQuickMessageSelect(FINAL_QUESTION.message, undefined);
     };
 
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'end'
+        });
+    };
+
+    const handleScroll = () => {
+        if (!chatContainerRef.current) return;
+        
+        const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+        setShowScrollButton(!isNearBottom);
+    };
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [chatHistory, isLoading]);
+
     return (
-        <div className="flex flex-col h-full rounded-xl overflow-hidden bg-[#0a0b15] shadow-2xl border border-border">
-            {/* Chat Header */}
-            <div className="flex items-center p-5 bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-b border-border backdrop-blur-lg">
-                <div className="flex flex-1 gap-4 items-center">
+        <div className={`
+            flex flex-col 
+            h-[calc(100vh-15rem)] sm:h-[600px] 
+            rounded-xl overflow-hidden 
+            bg-[#0a0b15] shadow-2xl border border-border
+        `}>
+            {/* Chat Header - adjusted sizing */}
+            <div className="flex items-center p-3 sm:p-4 bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-b border-border backdrop-blur-lg">
+                <div className="flex flex-1 gap-3 items-center sm:gap-4">
                     <div className="relative group">
                         <div className="absolute inset-0 bg-gradient-to-br from-[#b65eff] to-[#9d4edd] rounded-2xl blur-xl opacity-0 group-hover:opacity-50 transition-all duration-500"></div>
                         <div className="relative flex justify-center items-center w-11 h-11 rounded-2xl 
@@ -108,24 +135,31 @@ const Chat: React.FC = () => {
                 </div>
             </div>
 
-            {/* Chat Messages */}
+            {/* Chat Messages Container */}
             <div
-                className="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-[#0a0b15] to-[#13141f]"
-                style={{ maxHeight: 'calc(100vh - 240px)' }}
+                ref={chatContainerRef}
+                onScroll={handleScroll}
+                className="relative flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4 bg-gradient-to-b from-[#0a0b15] to-[#13141f]"
+                style={{ 
+                    height: 'auto',
+                    maxHeight: '100%',
+                    WebkitOverflowScrolling: 'touch'
+                }}
             >
+                {/* Chat Messages */}
                 {chatHistory.map((msg, index) => (
-                    <div key={index} className="flex gap-4 items-start mb-6 pointer-events-none animate-fadeIn">
+                    <div key={index} className="flex gap-2 items-start mb-4 pointer-events-none sm:gap-4 sm:mb-6 animate-fadeIn">
                         <MessageAvatar type={msg.type} />
-                        <div className={`rounded-2xl p-4 max-w-[80%] shadow-lg backdrop-blur-sm
+                        <div className={`rounded-2xl p-3 sm:p-4 max-w-[85%] sm:max-w-[80%] shadow-lg backdrop-blur-sm
                             ${msg.type === 'user'
                                 ? 'bg-gradient-to-br from-gradient-start to-brand-purple-dark shadow-brand-purple/20'
                                 : 'bg-bg-card-start border border-border shadow-border/20'}`}>
-                            <p className="text-white text-[15px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                            <p className="text-[16px] sm:text-[18px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
                         </div>
                     </div>
                 ))}
 
-                {/* Loading Indicator */}
+                {/* Loading Message */}
                 {isLoading && (
                     <div className="flex gap-4 items-start mb-6">
                         <div className="flex flex-shrink-0 justify-center items-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-purple to-[#7b2cbf] shadow-lg shadow-[#9d4edd]/20">
@@ -144,8 +178,39 @@ const Chat: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Scroll Reference */}
+                <div ref={messagesEndRef} />
+
+                {/* Scroll Button */}
+                {showScrollButton && (
+                    <button
+                        onClick={scrollToBottom}
+                        className="absolute right-4 bottom-4 z-10 
+                            p-2.5 rounded-full shadow-lg 
+                            transition-all duration-200 transform 
+                            bg-brand-purple/90 hover:bg-brand-purple hover:scale-105 
+                            animate-fadeIn"
+                        aria-label="Scroll to bottom"
+                    >
+                        <svg 
+                            className="w-6 h-6 text-white" 
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                        >
+                            <path 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                strokeWidth={2} 
+                                d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                            />
+                        </svg>
+                    </button>
+                )}
             </div>
 
+            {/* Quick Messages */}
             <QuickMessages
                 show={showQuickMessages && quickMessageState.currentQuestions.length > 0}
                 isLoading={isLoading}
@@ -155,7 +220,8 @@ const Chat: React.FC = () => {
                 hideOnType={isTyping}
             />
 
-            <form onSubmit={handleSubmit} className="p-3 sm:p-4 bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-t border-border">
+            {/* Input Form */}
+            <form onSubmit={handleSubmit} className="p-2 sm:p-3 bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-t border-border">
                 <div className="relative">
                     <input
                         type="text"
@@ -168,9 +234,9 @@ const Chat: React.FC = () => {
                                     ? "Waiting..."
                                     : "Ask me anything..."
                         }
-                        className="w-full py-3 sm:py-3.5 px-4 sm:px-5 pr-12 rounded-xl bg-[#1c1d29] text-white placeholder-gray-400 
+                        className="w-full py-2.5 sm:py-3 px-3 sm:px-4 pr-10 rounded-xl bg-[#1c1d29] text-white placeholder-gray-400 
                             border border-border 
-                            text-sm sm:text-base
+                            text-[16px] sm:text-[16px]
                             shadow-inner
                             ring-[#9d4edd]
                             focus:ring-2 focus:border-transparent
@@ -181,7 +247,7 @@ const Chat: React.FC = () => {
                     />
                     <button
                         type="submit"
-                        className="absolute right-3 top-1/2 p-2 -translate-y-1/2 
+                        className="absolute right-2 sm:right-3 top-1/2 p-1.5 sm:p-2 -translate-y-1/2 
                             text-[#9d4edd] hover:text-[#b65eff] 
                             transform hover:scale-110 active:scale-95
                             transition-all duration-200

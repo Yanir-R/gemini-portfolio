@@ -39,10 +39,7 @@ def get_gemini_response(
         client = genai.Client(api_key=api_key)
         MODEL_ID = "gemini-1.5-flash"
         
-        # Enhanced email pattern to catch more variations but still be strict
-        email_pattern = r'[\w\.-]+@[\w\.-]+\.\w{2,}'
-        
-        # Improved context analysis
+        # context analysis
         def analyze_conversation_context(history: List[Dict[str, str]], current_msg: str) -> dict:
             context = {
                 'is_email_context': False,
@@ -54,7 +51,7 @@ def get_gemini_response(
                 'email_collected': False
             }
             
-            # Enhanced email pattern
+            #  email pattern
             email_pattern = r'[\w\.-]+@[\w\.-]+\.\w{2,}'
             
             # Check if email was already collected in history

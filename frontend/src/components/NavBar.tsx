@@ -31,7 +31,7 @@ const NavBar: React.FC = () => {
                 fixed top-0 left-0 right-0 z-50 font-sans
                 transition-all duration-300 ease-in-out
                 ${scrolled
-                    ? 'bg-gray-900/80 backdrop-blur-md shadow-lg border-b border-purple-500/10'
+                    ? 'border-b shadow-lg backdrop-blur-md bg-gray-900/80 border-purple-500/10'
                     : 'bg-transparent backdrop-blur-sm'}
             `}>
                 <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
@@ -40,26 +40,26 @@ const NavBar: React.FC = () => {
                         <div className="flex items-center">
                             <a
                                 href="/"
-                                className="group flex items-center space-x-2 transition-all duration-300 hover:scale-105"
+                                className="flex items-center space-x-2 transition-all duration-300 group hover:scale-105"
                                 aria-label="Home"
                             >
-                                <span className="relative font-mono text-xl lg:text-2xl font-bold">
-                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 group-hover:from-cyan-500 group-hover:to-blue-500 transition-all duration-300">
+                                <span className="relative font-mono text-2xl font-bold lg:text-3xl">
+                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 transition-all duration-300 group-hover:from-cyan-500 group-hover:to-blue-500">
                                         Yanir.dev
                                     </span>
                                     <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-400 to-pink-600 group-hover:w-full transition-all duration-300"></span>
                                 </span>
-                                <span className="opacity-0 group-hover:opacity-100 transition-all duration-300 text-lg lg:text-xl transform group-hover:rotate-12 group-hover:translate-x-1">
+                                <span className="text-xl opacity-0 transition-all duration-300 transform lg:text-2xl group-hover:opacity-100 group-hover:rotate-12 group-hover:translate-x-1">
                                     ⚡
                                 </span>
                             </a>
                         </div>
 
                         {/* Desktop Navigation */}
-                        <div className="hidden lg:flex items-center">
+                        <div className="hidden items-center lg:flex">
                             <div className="flex items-center space-x-8">
                                 <NavLinks />
-                                <div className="h-6 w-px bg-gradient-to-b from-transparent via-purple-500/20 to-transparent"></div>
+                                <div className="w-px h-6 bg-gradient-to-b from-transparent to-transparent via-purple-500/20"></div>
                                 <SocialLinks className="flex items-center space-x-6" />
                             </div>
                         </div>
@@ -76,22 +76,22 @@ const NavBar: React.FC = () => {
                         ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}
                     `}
                 >
-                    <div className="px-2 pt-2 pb-3 space-y-1 border-t border-purple-500/10 shadow-lg">
-                        <div className="p-3 mx-2 mb-4 rounded-xl bg-gray-800/50 border border-purple-500/10 shadow-lg backdrop-blur-sm hover:bg-gray-800/60 transition-all duration-300">
-                            <div className="flex items-center space-x-2 mb-3">
+                    <div className="px-2 pt-2 pb-3 space-y-1 border-t shadow-lg border-purple-500/10">
+                        <div className="p-3 mx-2 mb-4 rounded-xl border shadow-lg backdrop-blur-sm transition-all duration-300 bg-gray-800/50 border-purple-500/10 hover:bg-gray-800/60">
+                            <div className="flex items-center mb-3 space-x-2">
                                 <div className="flex space-x-1.5">
-                                    <div className="w-2.5 h-2.5 rounded-full bg-status-error/90 shadow-lg shadow-red-500/20"></div>
-                                    <div className="w-2.5 h-2.5 rounded-full bg-status-warning/90 shadow-lg shadow-yellow-500/20"></div>
-                                    <div className="w-2.5 h-2.5 rounded-full bg-status-online/90 shadow-lg shadow-green-500/20"></div>
+                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-error/90 shadow-red-500/20"></div>
+                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-warning/90 shadow-yellow-500/20"></div>
+                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-online/90 shadow-green-500/20"></div>
                                 </div>
-                                <span className="ml-2 text-xs text-gray-400 font-mono">~/navigation</span>
+                                <span className="ml-2 font-mono text-sm text-gray-400">~/navigation</span>
                             </div>
                             <div className="transform transition-all duration-300 hover:scale-[1.01]">
                                 <NavLinks isMobile />
                             </div>
                         </div>
 
-                        <div className="px-4 py-3 bg-gray-800/30 rounded-lg backdrop-blur-sm mx-2 mb-2">
+                        <div className="px-4 py-3 mx-2 mb-2 rounded-lg backdrop-blur-sm bg-gray-800/30">
                             <SocialLinks className="flex justify-center space-x-4" />
                         </div>
                     </div>
