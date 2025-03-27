@@ -69,8 +69,9 @@ const Chat: React.FC = () => {
             h-[calc(100vh-15rem)] sm:h-[600px] 
             rounded-xl overflow-hidden 
             bg-[#0a0b15] shadow-2xl border border-border
+            relative
         `}>
-            {/* Chat Header - adjusted sizing */}
+            {/* Chat Header */}
             <div className="flex items-center p-3 sm:p-4 bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-b border-border backdrop-blur-lg">
                 <div className="flex flex-1 gap-3 items-center sm:gap-4">
                     <div className="relative group">
@@ -139,7 +140,9 @@ const Chat: React.FC = () => {
             <div
                 ref={chatContainerRef}
                 onScroll={handleScroll}
-                className="relative flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4 bg-gradient-to-b from-[#0a0b15] to-[#13141f]"
+                className="relative flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4 
+                    bg-gradient-to-b from-[#0a0b15] to-[#13141f]
+                    pb-[calc(4rem+var(--quick-message-height,0px))] sm:pb-4"
                 style={{ 
                     height: 'auto',
                     maxHeight: '100%',
@@ -182,11 +185,11 @@ const Chat: React.FC = () => {
                 {/* Scroll Reference */}
                 <div ref={messagesEndRef} />
 
-                {/* Scroll Button */}
+                {/* Scroll Button - Adjusted to align with send button */}
                 {showScrollButton && (
                     <button
                         onClick={scrollToBottom}
-                        className="absolute right-4 bottom-4 z-10 
+                        className="fixed sm:absolute right-6 bottom-28 sm:bottom-16 z-20
                             p-2.5 rounded-full shadow-lg 
                             transition-all duration-200 transform 
                             bg-brand-purple/90 hover:bg-brand-purple hover:scale-105 
@@ -194,7 +197,7 @@ const Chat: React.FC = () => {
                         aria-label="Scroll to bottom"
                     >
                         <svg 
-                            className="w-6 h-6 text-white" 
+                            className="w-5 h-5 text-white" 
                             fill="none" 
                             stroke="currentColor" 
                             viewBox="0 0 24 24"
@@ -211,17 +214,26 @@ const Chat: React.FC = () => {
             </div>
 
             {/* Quick Messages */}
-            <QuickMessages
-                show={showQuickMessages && quickMessageState.currentQuestions.length > 0}
-                isLoading={isLoading}
-                onMessageSelect={handleQuickMessageSelect}
-                currentQuestions={quickMessageState.currentQuestions}
-                questionLevel={quickMessageState.level}
-                hideOnType={isTyping}
-            />
+            <div className="sticky bottom-[3.5rem] sm:relative sm:bottom-0 z-10 bg-[#0a0b15]">
+                <QuickMessages
+                    show={showQuickMessages && quickMessageState.currentQuestions.length > 0}
+                    isLoading={isLoading}
+                    onMessageSelect={handleQuickMessageSelect}
+                    currentQuestions={quickMessageState.currentQuestions}
+                    questionLevel={quickMessageState.level}
+                    hideOnType={isTyping}
+                />
+            </div>
 
             {/* Input Form */}
-            <form onSubmit={handleSubmit} className="p-2 sm:p-3 bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-t border-border">
+            <form 
+                onSubmit={handleSubmit} 
+                className="sticky bottom-0 sm:relative z-10
+                    p-2 sm:p-3 
+                    bg-gradient-to-r from-[#13141f] to-[#1a1b26] 
+                    border-t border-border
+                    shadow-lg"
+            >
                 <div className="relative">
                     <input
                         type="text"
@@ -234,7 +246,8 @@ const Chat: React.FC = () => {
                                     ? "Waiting..."
                                     : "Ask me anything..."
                         }
-                        className="w-full py-2.5 sm:py-3 px-3 sm:px-4 pr-10 rounded-xl bg-[#1c1d29] text-white placeholder-gray-400 
+                        className="w-full py-2.5 sm:py-3 px-3 sm:px-4 pr-10 rounded-xl 
+                            bg-[#1c1d29] text-white placeholder-gray-400 
                             border border-border 
                             text-[16px] sm:text-[16px]
                             shadow-inner
