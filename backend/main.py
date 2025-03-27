@@ -119,6 +119,37 @@ async def chat_with_files(chat_request: ChatRequest):
                 detail="GEMINI_API_KEY not found in environment variables"
             )
         
+        # Check if message contains ONLY an email address
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        message = chat_request.message.strip()
+        is_just_email = re.match(email_pattern, message)
+        
+        if is_just_email:
+            try:
+                email = message
+                valid = validate_email(email)
+                email = valid.email
+                
+                contact_request = ContactRequest(
+                    email=email,
+                    message="User submitted email via chat without context"
+                )
+                
+                await contact(contact_request)
+                logger.info(f"Email notification sent for direct email submission: {email}")
+                
+                return {
+                    "response": "✉️ 👱🏻‍♂️ ✉️\n\nHey there 👋,\n\nThanks so much for reaching out! I got your email and wanted to let you know I saw it. ✨\n\nI appreciate you getting in touch. 🙏\n\nDo you have any other questions I can help with? Don't hesitate to ask – I'm happy to chat more! 💬",
+                    "email_collected": True,
+                    "is_email_collection": False
+                }
+            except EmailNotValidError:
+                return {
+                    "response": "That doesn't look like a valid email address. Could you please try again with a valid email? 📧",
+                    "email_collected": False,
+                    "is_email_collection": True
+                }
+
         # Check if we're in email collection mode
         in_email_collection = any(
             msg.is_email_collection and not msg.email_collected

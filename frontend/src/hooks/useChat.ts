@@ -81,23 +81,24 @@ export const useChat = () => {
 
         const finalMessage = messageText || message;
         setIsLoading(true);
-        setShowQuickMessages(false); // Hide messages while loading
+        setShowQuickMessages(false);
 
-        // Hide quick messages permanently if it's a free-form message or final question
+        // If message is from input (message state), use 'user' type
+        const messageType = messageText && message === '' ? 'quick' : 'user';
+
         if (!messageText || isEmailRelated) {
             setQuickMessageState({
                 currentQuestions: [],
-                level: 3 // Level 3 means we're done with quick messages
+                level: 3
             });
         } else {
-            // Update to next level of questions
             updateQuickMessages(nextQuestions);
         }
 
         try {
-            // Add the user message to chat history first
+            // Add the message to chat history with correct type
             setChatHistory(prev => [...prev, {
-                type: 'user',
+                type: messageType,
                 content: finalMessage
             }]);
 

@@ -66,7 +66,7 @@ const Chat: React.FC = () => {
     return (
         <div className={`
             flex flex-col 
-            h-[calc(100vh-15rem)] sm:h-[600px] 
+            h-[calc(100vh-280px)] sm:h-[600px]
             rounded-xl overflow-hidden 
             bg-[#0a0b15] shadow-2xl border border-border
             relative
@@ -141,11 +141,8 @@ const Chat: React.FC = () => {
                 ref={chatContainerRef}
                 onScroll={handleScroll}
                 className="relative flex-1 overflow-y-auto overscroll-y-contain p-3 sm:p-4 
-                    bg-gradient-to-b from-[#0a0b15] to-[#13141f]
-                    pb-[calc(4rem+var(--quick-message-height,0px))] sm:pb-4"
+                    bg-gradient-to-b from-[#0a0b15] to-[#13141f]"
                 style={{ 
-                    height: 'auto',
-                    maxHeight: '100%',
                     WebkitOverflowScrolling: 'touch'
                 }}
             >
@@ -154,7 +151,7 @@ const Chat: React.FC = () => {
                     <div key={index} className="flex gap-2 items-start mb-4 pointer-events-none sm:gap-4 sm:mb-6 animate-fadeIn">
                         <MessageAvatar type={msg.type} />
                         <div className={`rounded-2xl p-3 sm:p-4 max-w-[85%] sm:max-w-[80%] shadow-lg backdrop-blur-sm
-                            ${msg.type === 'user'
+                            ${(msg.type === 'user' || msg.type === 'quick')
                                 ? 'bg-gradient-to-br from-gradient-start to-brand-purple-dark shadow-brand-purple/20'
                                 : 'bg-bg-card-start border border-border shadow-border/20'}`}>
                             <p className="text-[16px] sm:text-[18px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
@@ -214,7 +211,7 @@ const Chat: React.FC = () => {
             </div>
 
             {/* Quick Messages */}
-            <div className="sticky bottom-[3.5rem] sm:relative sm:bottom-0 z-10 bg-[#0a0b15]">
+            <div className="bg-[#0a0b15]">
                 <QuickMessages
                     show={showQuickMessages && quickMessageState.currentQuestions.length > 0}
                     isLoading={isLoading}
@@ -228,7 +225,7 @@ const Chat: React.FC = () => {
             {/* Input Form */}
             <form 
                 onSubmit={handleSubmit} 
-                className="sticky bottom-0 sm:relative z-10
+                className="relative
                     p-2 sm:p-3 
                     bg-gradient-to-r from-[#13141f] to-[#1a1b26] 
                     border-t border-border

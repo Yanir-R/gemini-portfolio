@@ -4,14 +4,16 @@ export const MESSAGE_AVATARS: Record<MessageType, string> = {
     user: '👤',
     system: 'ℹ️',
     ai: '🤖',
-    initial: '🤖'
+    initial: '🤖',
+    quick: '👆'
 } as const;
 
 export const MESSAGE_STYLES: Record<MessageType, string> = {
     user: 'bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg shadow-blue-500/20',
     system: 'bg-gradient-to-br from-gray-400 to-gray-600 shadow-lg shadow-gray-500/20',
     ai: 'bg-gradient-to-br from-brand-purple-light to-brand-purple-dark shadow-lg shadow-brand-purple/30',
-    initial: 'bg-gradient-to-br from-pink-400 to-pink-600 shadow-lg shadow-pink-500/30'
+    initial: 'bg-gradient-to-br from-pink-400 to-pink-600 shadow-lg shadow-pink-500/30',
+    quick: 'bg-gradient-to-br from-green-400 to-green-600 shadow-lg shadow-green-500/20'
 } as const;
 
 export const INITIAL_QUESTIONS: QuickMessageOption[] = [
