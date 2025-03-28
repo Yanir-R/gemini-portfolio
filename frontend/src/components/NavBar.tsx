@@ -18,8 +18,12 @@ const NavBar: React.FC = () => {
 
     const toggleMenu = () => {
         setIsMenuOpen(!isMenuOpen);
-        // Toggle a class on the body to prevent scrolling when menu is open
         document.body.classList.toggle('menu-open');
+    };
+
+    const closeMenu = () => {
+        setIsMenuOpen(false);
+        document.body.classList.remove('menu-open');
     };
 
     return (
@@ -87,7 +91,7 @@ const NavBar: React.FC = () => {
                                 <span className="ml-2 font-mono text-sm text-gray-400">~/navigation</span>
                             </div>
                             <div className="transform transition-all duration-300 hover:scale-[1.01]">
-                                <NavLinks isMobile />
+                                <NavLinks isMobile onNavigate={closeMenu} />
                             </div>
                         </div>
 

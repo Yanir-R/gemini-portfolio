@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 
 interface NavLink {
     href: string;
@@ -10,9 +10,19 @@ interface NavLink {
 interface NavLinksProps {
     isMobile?: boolean;
     className?: string;
+    onNavigate?: () => void;
 }
 
-const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = "" }) => {
+const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = "", onNavigate }) => {
+    const location = useLocation();
+    const isHomePage = location.pathname === '/';
+
+    const handleNavClick = () => {
+        if (isMobile && onNavigate) {
+            onNavigate();
+        }
+    };
+
     const links: NavLink[] = [
         { href: "/about", label: "About Me", icon: "🤵🏼" },
         { href: "/blog", label: "Blog", icon: "📝" }
@@ -28,10 +38,25 @@ const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = "" })
 
     return (
         <div className={`${isMobile ? 'p-4 space-y-3' : 'flex space-x-8 text-base font-medium'} ${className}`}>
+
+            {isMobile && !isHomePage && (
+                <NavLink
+                    to="/"
+                    onClick={handleNavClick}
+                    className={`flex items-center bg-gradient-to-r ${baseStyles} border-purple-500/20 from-purple-500/10 to-pink-500/10`}
+                >
+                    <span className="mr-2 text-xl text-purple-400">←</span>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
+                        cd ~/home
+                    </span>
+                </NavLink>
+            )}
+            
             {links.map((link) => (
                 <NavLink
                     key={link.href}
                     to={link.href}
+                    onClick={handleNavClick}
                     className={({ isActive }) => `
                         ${baseStyles}
                         ${underlineStyles}

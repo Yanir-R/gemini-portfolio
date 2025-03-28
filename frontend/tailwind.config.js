@@ -116,13 +116,24 @@ module.exports = {
                         opacity: 0.8,
                         transform: 'scale(0.9)'
                     }
-                }
+                },
+                'bounce-gentle': {
+                    '0%, 100%': {
+                        transform: 'translateY(-10%)',
+                        animationTimingFunction: 'cubic-bezier(0.8, 0, 1, 1)',
+                    },
+                    '50%': {
+                        transform: 'translateY(0)',
+                        animationTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
+                    },
+                },
             },
             animation: {
                 fadeIn: 'fadeIn 0.3s ease-out forwards',
                 disco: 'disco 3s ease-in-out infinite',
                 float: 'float 2s ease-in-out infinite',
-                pulse: 'pulse 2s ease-in-out infinite'
+                pulse: 'pulse 2s ease-in-out infinite',
+                bounceGentle: 'bounce-gentle 2s infinite'
             },
         },
     },

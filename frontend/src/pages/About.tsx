@@ -2,6 +2,7 @@ import React from 'react';
 import { apiClient } from '../api/client';
 import { API_ENDPOINTS } from '../api/endpoints';
 import TypingAnimation from '../components/TypingAnimation';
+import ReturnHome from '../components/ReturnHome';
 
 const About: React.FC = () => {
     const [content, setContent] = React.useState<string>('');
@@ -77,6 +78,7 @@ const About: React.FC = () => {
                     </div>
                 )}
             </div>
+            <ReturnHome />
         </div>
     );
 };

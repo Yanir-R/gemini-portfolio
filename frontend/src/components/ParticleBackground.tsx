@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useScreenSize } from '@/hooks/useScreenSize';
 
 interface Particle {
     x: number;
@@ -10,6 +11,9 @@ interface Particle {
 
 const ParticleBackground: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const particlesRef = useRef<Particle[]>([]);
+    const animationFrameRef = useRef<number>();
+    const { isKeyboardVisible } = useScreenSize();
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -18,38 +22,50 @@ const ParticleBackground: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const handleResize = () => {
-            const scale = window.devicePixelRatio || 1;
-            canvas.width = window.innerWidth * scale;
-            canvas.height = window.innerHeight * scale;
-            ctx.scale(scale, scale);
-            canvas.style.width = `${window.innerWidth}px`;
-            canvas.style.height = `${window.innerHeight}px`;
+        const initializeParticles = () => {
+            const particles: Particle[] = [];
+            const particleCount = 100;
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    dx: (Math.random() - 0.5) * 0.5,
+                    dy: (Math.random() - 0.5) * 0.5,
+                    radius: Math.random() * 3 + 1,
+                });
+            }
+            
+            particlesRef.current = particles;
         };
 
-        handleResize();
-        window.addEventListener('resize', handleResize);
+        const handleResize = () => {
+            // Cancel any pending animation frame
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
 
-        // Create particles
-        const particles: Particle[] = [];
-        const particleCount = 100;
+            const scale = window.devicePixelRatio || 1;
+            const width = window.innerWidth;
+            const height = window.innerHeight;
 
-        for (let i = 0; i < particleCount; i++) {
-            particles.push({
-                x: Math.random() * window.innerWidth,
-                y: Math.random() * window.innerHeight,
-                dx: (Math.random() - 0.5) * 0.5,
-                dy: (Math.random() - 0.5) * 0.5,
-                radius: Math.random() * 3 + 1,
-            });
-        }
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
+            ctx.scale(scale, scale);
 
-        // Animation function
+            initializeParticles();
+            animate();
+        };
+
         const animate = () => {
             ctx.fillStyle = 'rgba(17, 24, 39, 1)';
             ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
-            particles.forEach(particle => {
+            particlesRef.current.forEach(particle => {
                 // Draw particle
                 ctx.beginPath();
                 ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
@@ -61,7 +77,7 @@ const ParticleBackground: React.FC = () => {
                 particle.y += particle.dy;
 
                 // Connect particles within 150px
-                particles.forEach(otherParticle => {
+                particlesRef.current.forEach(otherParticle => {
                     const distance = Math.sqrt(
                         Math.pow(particle.x - otherParticle.x, 2) +
                         Math.pow(particle.y - otherParticle.y, 2)
@@ -82,15 +98,22 @@ const ParticleBackground: React.FC = () => {
                 if (particle.y < 0 || particle.y > window.innerHeight) particle.dy *= -1;
             });
 
-            requestAnimationFrame(animate);
+            animationFrameRef.current = requestAnimationFrame(animate);
         };
 
-        animate();
+        // Initial setup
+        handleResize();
+
+        // Only listen for resize, orientation is handled in useScreenSize
+        window.addEventListener('resize', handleResize);
 
         return () => {
             window.removeEventListener('resize', handleResize);
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
         };
-    }, []);
+    }, [isKeyboardVisible]);
 
     return (
         <canvas
