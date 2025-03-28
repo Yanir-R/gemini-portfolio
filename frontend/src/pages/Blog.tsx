@@ -1,4 +1,5 @@
 import React from 'react';
+import ReturnHome from '../components/ReturnHome';
 
 const Blog: React.FC = () => {
     return (
@@ -10,6 +11,7 @@ const Blog: React.FC = () => {
             <div className="flex justify-center items-center min-h-[300px]">
                 <p className="text-2xl font-medium text-gray-400">Coming Soon!</p>
             </div>
+            <ReturnHome />
         </div>
     );
 };
