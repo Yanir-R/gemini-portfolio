@@ -1,29 +1,21 @@
 steps:
-  # Grant permissions to workspace
-  - name: gcr.io/cloud-builders/docker
-    args:
-      - a+w
-      - /workspace
-    entrypoint: chmod
-
-  # Use crane to download the image
-  - name: gcr.io/go-containerregistry/crane
-    args:
-      - pull
-      - "python:3.9-slim"
-      - /workspace/image.tar
-
-  # Load the image
-  - name: gcr.io/cloud-builders/docker
-    args: [load, --input, "/workspace/image.tar"]
-
   # Build the container image
   - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "gcr.io/$PROJECT_ID/backend", "."]
+    args:
+      [
+        "build",
+        "-t",
+        "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/backend:${_TAG}",
+        ".",
+      ]
 
-  # Push the container image to Container Registry
+  # Push the container image to Artifact Registry
   - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "gcr.io/$PROJECT_ID/backend"]
+    args:
+      [
+        "push",
+        "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/backend:${_TAG}",
+      ]
 
   # Deploy container image to Cloud Run
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -33,9 +25,9 @@ steps:
       - "deploy"
       - "backend"
       - "--image"
-      - "gcr.io/$PROJECT_ID/backend"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/backend:${_TAG}"
       - "--region"
-      - "me-west1"
+      - "${_REGION}"
       - "--platform"
       - "managed"
       - "--allow-unauthenticated"
@@ -47,12 +39,12 @@ steps:
         "run",
         "domain-mappings",
         "create",
-        "--service=$_SERVICE_NAME",
-        "--domain=$_DOMAIN",
-        "--region=$_REGION",
+        "--service=backend",
+        "--domain=${_DOMAIN}",
+        "--region=${_REGION}",
         "--quiet",
       ]
 
 timeout: "1800s"
 images:
-  - "gcr.io/$PROJECT_ID/backend"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPOSITORY}/backend:${_TAG}"

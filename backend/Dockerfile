@@ -18,4 +18,4 @@ COPY . .
 EXPOSE 8080
 
 # Run with gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--worker-class", "uvicorn.workers.UvicornWorker", "main:app"] 
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers=4", "--worker-class", "uvicorn.workers.UvicornWorker", "main:app"]
