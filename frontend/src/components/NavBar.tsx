@@ -75,7 +75,7 @@ const NavBar: React.FC = () => {
 
                 <div
                     className={`
-                        lg:hidden absolute top-16 left-0 right-0 
+                        lg:hidden absolute top-16 left-0 right-0
                         transform transition-all duration-300 ease-in-out bg-gray-900/95 backdrop-blur-md
                         ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}
                     `}
