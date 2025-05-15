@@ -4,14 +4,18 @@ interface EnvelopeTooltipProps {
     show: boolean;
     buttonRect: DOMRect | null;
     handleEnvelopeClick: () => void;
+    isMenuOpen?: boolean;
 }
 
-export const EnvelopeTooltip: React.FC<EnvelopeTooltipProps> = ({ show, buttonRect, handleEnvelopeClick }) => {
+export const EnvelopeTooltip: React.FC<EnvelopeTooltipProps> = ({ show, buttonRect, handleEnvelopeClick, isMenuOpen = false }) => {
     if (!show || !buttonRect) return null;
+    
+    // Hide tooltip completely when menu is open on mobile
+    if (isMenuOpen && window.innerWidth < 1024) return null;
 
     return createPortal(
         <div 
-            className="fixed z-[9999] animate-fadeIn"
+            className={`fixed animate-fadeIn ${isMenuOpen ? 'z-[10]' : 'z-[30]'}`}
             style={{
                 top: `${buttonRect.top - 65}px`,
                 left: `${buttonRect.left - 15}px`,

@@ -20,6 +20,8 @@ const Chat: React.FC = () => {
     } = useChat();
 
     const [isTyping, setIsTyping] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const [showScrollButton, setShowScrollButton] = useState(false);
@@ -51,7 +53,7 @@ const Chat: React.FC = () => {
     };
 
     const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ 
+        messagesEndRef.current?.scrollIntoView({
             behavior: 'smooth',
             block: 'end'
         });
@@ -59,11 +61,27 @@ const Chat: React.FC = () => {
 
     const handleScroll = () => {
         if (!chatContainerRef.current) return;
-        
+
         const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
         const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
         setShowScrollButton(!isNearBottom);
     };
+
+    // Set initial loading to false after a few seconds or when hasFiles changes
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setIsInitialLoading(false);
+        }, 3000);
+
+        return () => clearTimeout(timer);
+    }, []);
+
+    // When hasFiles changes, also update isInitialLoading
+    useEffect(() => {
+        if (hasFiles) {
+            setIsInitialLoading(false);
+        }
+    }, [hasFiles]);
 
     useEffect(() => {
         scrollToBottom();
@@ -100,13 +118,41 @@ const Chat: React.FC = () => {
         };
     }, []);
 
+    useEffect(() => {
+        const checkMenuState = () => {
+            setIsMenuOpen(document.body.classList.contains('menu-open'));
+        };
+
+        checkMenuState();
+
+        // Check when body classes change
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.attributeName === 'class') {
+                    checkMenuState();
+                }
+            });
+        });
+
+        observer.observe(document.body, { attributes: true });
+
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
+
     return (
         <>
-            <EnvelopeTooltip show={showTooltip} buttonRect={buttonRect} handleEnvelopeClick={handleEnvelopeClick} />
+            <EnvelopeTooltip
+                show={showTooltip}
+                buttonRect={buttonRect}
+                handleEnvelopeClick={handleEnvelopeClick}
+                isMenuOpen={isMenuOpen}
+            />
             <div className={`
                 flex flex-col 
-                ${isKeyboardVisible 
-                    ? 'h-[calc(var(--vh,1vh)*80)]' 
+                ${isKeyboardVisible
+                    ? 'h-[calc(var(--vh,1vh)*80)]'
                     : 'h-[calc(var(--vh,1vh)*100-15rem)]'
                 } sm:h-[600px]
                 rounded-xl overflow-hidden 
@@ -163,16 +209,16 @@ const Chat: React.FC = () => {
                                             transition-all duration-300 ease-out"
                                         aria-label="Contact me"
                                     >
-                                        <svg 
+                                        <svg
                                             className="relative w-4 h-4 transition-all duration-300 transform text-brand-purple/80 group-hover:scale-110 group-hover:text-brand-purple animate-float"
-                                            fill="none" 
-                                            stroke="currentColor" 
+                                            fill="none"
+                                            stroke="currentColor"
                                             viewBox="0 0 24 24"
                                         >
-                                            <path 
-                                                strokeLinecap="round" 
-                                                strokeLinejoin="round" 
-                                                strokeWidth={2} 
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
                                                 d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                                             />
                                         </svg>
@@ -196,7 +242,7 @@ const Chat: React.FC = () => {
                         scrollbar-thin scrollbar-thumb-brand-purple scrollbar-track-transparent
                         hover:scrollbar-thumb-brand-purple-light
                     `}
-                    style={{ 
+                    style={{
                         height: 'auto',
                         maxHeight: '100%',
                         WebkitOverflowScrolling: 'touch'
@@ -248,16 +294,16 @@ const Chat: React.FC = () => {
                                 animate-fadeIn"
                             aria-label="Scroll to bottom"
                         >
-                            <svg 
-                                className="w-5 h-5 text-white" 
-                                fill="none" 
-                                stroke="currentColor" 
+                            <svg
+                                className="w-5 h-5 text-white"
+                                fill="none"
+                                stroke="currentColor"
                                 viewBox="0 0 24 24"
                             >
-                                <path 
-                                    strokeLinecap="round" 
-                                    strokeLinejoin="round" 
-                                    strokeWidth={2} 
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
                                     d="M19 14l-7 7m0 0l-7-7m7 7V3"
                                 />
                             </svg>
@@ -277,8 +323,8 @@ const Chat: React.FC = () => {
                     />
                 </div>
 
-                <form 
-                    onSubmit={handleSubmit} 
+                <form
+                    onSubmit={handleSubmit}
                     className={`
                         sticky bottom-0 sm:relative z-10
                         p-2 sm:p-3 
@@ -295,11 +341,13 @@ const Chat: React.FC = () => {
                             onChange={handleInputChange}
                             onFocus={() => scrollToBottom()}
                             placeholder={
-                                !hasFiles
-                                    ? "⚠️ No files available"
-                                    : isLoading
-                                        ? "Waiting..."
-                                        : "Ask me anything..."
+                                isInitialLoading
+                                    ? "Loading files..."
+                                    : !hasFiles
+                                        ? "⚠️ No files available"
+                                        : isLoading
+                                            ? "Waiting..."
+                                            : "Ask me anything..."
                             }
                             className="w-full py-2.5 sm:py-3 px-3 sm:px-4 pr-12
                                 bg-[#1c1d29] text-white placeholder-gray-400 
