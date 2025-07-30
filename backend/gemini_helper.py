@@ -35,12 +35,18 @@ def get_gemini_response(
     pdf_content: Optional[str] = None, 
     conversation_history: Optional[List[Dict[str, str]]] = None
 ):
-    try:
-        client = genai.Client(api_key=api_key)
-        MODEL_ID = "gemini-1.5-flash"
-        
-        # context analysis
-        def analyze_conversation_context(history: List[Dict[str, str]], current_msg: str) -> dict:
+    # Define fallback models in order of preference
+    MODELS = [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro", 
+        "gemini-1.0-pro",
+        "gemini-pro"
+    ]
+    
+    client = genai.Client(api_key=api_key)
+    
+    # context analysis
+    def analyze_conversation_context(history: List[Dict[str, str]], current_msg: str) -> dict:
             context = {
                 'is_email_context': False,
                 'has_valid_email': False,
@@ -82,19 +88,19 @@ def get_gemini_response(
             return context
 
         # Build conversation history text
-        history_text = ""
-        if conversation_history:
-            history_text = "Previous conversation:\n"
-            for msg in conversation_history[-4:]:
-                role = "User" if msg["role"] == "user" else "Assistant"
-                history_text += f"{role}: {msg['content']}\n"
-            history_text += "\n"
+    history_text = ""
+    if conversation_history:
+        history_text = "Previous conversation:\n"
+        for msg in conversation_history[-4:]:
+            role = "User" if msg["role"] == "user" else "Assistant"
+            history_text += f"{role}: {msg['content']}\n"
+        history_text += "\n"
 
-        # Analyze context
-        context = analyze_conversation_context(conversation_history or [], user_question)
-        
-        # Define response templates
-        RESPONSE_TEMPLATES = {
+    # Analyze context
+    context = analyze_conversation_context(conversation_history or [], user_question)
+    
+    # Define response templates
+    RESPONSE_TEMPLATES = {
             'ask_email_friendly': """
             Create a friendly, single follow-up response that:
             1. Thanks them for their interest
@@ -128,16 +134,19 @@ def get_gemini_response(
             4. Doesn't repeat previous responses
             
             Keep it natural and concise."""
-        }
+    }
 
-        # Generate appropriate prompt based on context
-        if context['conversation_stage'] in RESPONSE_TEMPLATES:
-            prompt = RESPONSE_TEMPLATES[context['conversation_stage']].format(
-                user_question=user_question,
-                history_text=history_text
-            )
-        elif context['conversation_stage'] == 'invalid_email':
-            prompt = f"""The user provided an invalid email: {context['email_error']}.
+    # Try each model until one works
+    for model_id in MODELS:
+        try:
+            # Generate appropriate prompt based on context
+            if context['conversation_stage'] in RESPONSE_TEMPLATES:
+                prompt = RESPONSE_TEMPLATES[context['conversation_stage']].format(
+                    user_question=user_question,
+                    history_text=history_text
+                )
+            elif context['conversation_stage'] == 'invalid_email':
+                prompt = f"""The user provided an invalid email: {context['email_error']}.
             Create a helpful response that:
             1. Acknowledges their attempt
             2. Explains the specific issue clearly
@@ -145,66 +154,75 @@ def get_gemini_response(
             4. Maintains a helpful tone
             5. Indicates they can continue chatting about other topics
             
-            Keep it concise and friendly."""
-            
-        elif context['conversation_stage'] == 'email_provided':
-            # Extract username from email
-            email = context['provided_email']
-            username = email.split('@')[0] if '@' in email else 'there'
-            
-            # Check if this was a direct email input
-            is_direct_email = any(
-                msg['content'].strip() == email.strip() 
-                for msg in conversation_history[-2:] 
-                if msg['role'] == 'user'
-            )
-            
-            if is_direct_email:
-                prompt = f"""Email received: {context['provided_email']}
-                Create a brief, direct confirmation response that:
-                1. Simply confirms receipt
-                2. Keeps it minimal since we'll show the system message after
+                Keep it concise and friendly."""
                 
-                Keep it very short and simple."""
-            else:
-                prompt = f"""Email received: {context['provided_email']}
-                Create a friendly response that:
-                1. Confirms receipt warmly
-                2. Shows appreciation
-                3. Encourages further questions
-                4. Maintains a casual tone
+            elif context['conversation_stage'] == 'email_provided':
+                # Extract username from email
+                email = context['provided_email']
+                username = email.split('@')[0] if '@' in email else 'there'
                 
-                Keep it natural and engaging."""
-            
-        elif pdf_content:
-            prompt = f"""Previous: {history_text}
-            Content: {pdf_content}
-            Question: {user_question}
+                # Check if this was a direct email input
+                is_direct_email = any(
+                    msg['content'].strip() == email.strip() 
+                    for msg in conversation_history[-2:] 
+                    if msg['role'] == 'user'
+                )
+                
+                if is_direct_email:
+                    prompt = f"""Email received: {context['provided_email']}
+                    Create a brief, direct confirmation response that:
+                    1. Simply confirms receipt
+                    2. Keeps it minimal since we'll show the system message after
+                    
+                    Keep it very short and simple."""
+                else:
+                    prompt = f"""Email received: {context['provided_email']}
+                    Create a friendly response that:
+                    1. Confirms receipt warmly
+                    2. Shows appreciation
+                    3. Encourages further questions
+                    4. Maintains a casual tone
+                    
+                    Keep it natural and engaging."""
+                
+            elif pdf_content:
+                prompt = f"""Previous: {history_text}
+                Content: {pdf_content}
+                Question: {user_question}
             
             Create a brief response that:
             1. Answers directly
             2. Stays conversational
             3. Encourages follow-up
             
-            Keep it concise and natural."""
-        else:
-            prompt = f"""Previous: {history_text}
-            Question: {user_question}
-            
-            Create a brief response that:
-            1. Acknowledges limitations
-            2. Stays helpful
-            3. Keeps conversation going
-            
-            Be concise and friendly."""
+                Keep it concise and natural."""
+            else:
+                prompt = f"""Previous: {history_text}
+                Question: {user_question}
+                
+                Create a brief response that:
+                1. Acknowledges limitations
+                2. Stays helpful
+                3. Keeps conversation going
+                
+                Be concise and friendly."""
 
-        response = client.models.generate_content(
-            model=MODEL_ID,
-            contents=prompt
-        )
+            response = client.models.generate_content(
+                model=model_id,
+                contents=prompt
+            )
 
-        return response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
+            return response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
+        
+        except Exception as e:
+            print(f"Gemini API Error with model {model_id}: {str(e)}")
+            # Check if this is a 503 or overload error
+            if "503" in str(e) or "overloaded" in str(e).lower() or "unavailable" in str(e).lower():
+                print(f"Model {model_id} is overloaded, trying next model...")
+                continue
+            else:
+                # For other errors, don't try other models
+                return f"I encountered an error while processing your request: {str(e)}"
     
-    except Exception as e:
-        print(f"Gemini API Error: {str(e)}")
-        return f"I encountered an error while processing your request: {str(e)}" 
+    # If all models failed
+    return "I'm sorry, all AI models are currently experiencing high demand. Please try again in a few moments." 

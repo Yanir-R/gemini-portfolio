@@ -23,7 +23,7 @@ const QuickMessageButton: React.FC<QuickMessageButtonProps> = ({
     onClick,
     nextQuestions,
     disabled,
-    className = 'flex-1'
+    className = ''
 }) => {
     // Check if message is email-related
     const isEmailRelated = message.toLowerCase().includes('contact') ||
@@ -33,13 +33,14 @@ const QuickMessageButton: React.FC<QuickMessageButtonProps> = ({
     return (
         <button
             onClick={() => onClick(message, nextQuestions, isEmailRelated, messageAvatar)}
-            className={`group relative flex items-center gap-2 sm:gap-3 
-                px-3 sm:px-5 py-2 sm:py-3 rounded-lg sm:rounded-xl
+            className={`group relative flex items-center gap-2 
+                px-3 py-2 rounded-lg
                 bg-gradient-to-br from-[#1c1d29] to-[#1c1d29]/90
                 overflow-hidden
                 transform hover:-translate-y-0.5 active:translate-y-0
                 transition-all duration-200 ease-out
                 border border-transparent hover:border-[#9d4edd]/20
+                min-h-[44px] max-w-full
                 ${className}`}
             disabled={disabled}
         >
@@ -48,31 +49,31 @@ const QuickMessageButton: React.FC<QuickMessageButtonProps> = ({
                 opacity-0 group-hover:opacity-100
                 transition-opacity duration-300"></div>
 
-            {/* Icon container */}
-            <div className="relative flex justify-center items-center w-7 sm:w-9 h-7 sm:h-9 rounded-md
+            {/* Icon container - more compact */}
+            <div className="relative flex justify-center items-center w-6 h-6 rounded-md
                 bg-gradient-to-br from-[#1c1d29] to-[#252632]
                 border border-[#9d4edd]/10 group-hover:border-[#9d4edd]/30
                 shadow-sm shadow-[#9d4edd]/5 group-hover:shadow-[#9d4edd]/10
-                transition-all duration-200">
-                <span className="text-base sm:text-lg transition-transform duration-200 group-hover:scale-110 text-[#9d4edd]/80 group-hover:text-[#9d4edd]">
+                transition-all duration-200 flex-shrink-0">
+                <span className="text-sm transition-transform duration-200 group-hover:scale-110 text-[#9d4edd]/80 group-hover:text-[#9d4edd]">
                     {icon}
                 </span>
             </div>
 
-            {/* Text content */}
+            {/* Text content - more compact */}
             <div className="relative flex-1 min-w-0">
-                <p className="text-xs font-medium truncate transition-colors duration-200 sm:text-sm text-white/80 group-hover:text-white">
+                <p className="text-xs font-medium truncate transition-colors duration-200 text-white/80 group-hover:text-white leading-tight">
                     {title}
                 </p>
-                <p className="text-[10px] sm:text-xs text-gray-400 truncate transition-colors duration-200 group-hover:text-gray-300">
+                <p className="text-[10px] text-gray-400 truncate transition-colors duration-200 group-hover:text-gray-300 leading-tight">
                     {description}
                 </p>
             </div>
 
-            {/* Arrow icon - simplified */}
+            {/* Arrow icon - smaller */}
             <svg
-                className="w-4 h-4 sm:w-5 sm:h-5 text-[#9d4edd]/30 group-hover:text-[#9d4edd]/70
-                    transition-colors duration-200"
+                className="w-3 h-3 text-[#9d4edd]/30 group-hover:text-[#9d4edd]/70
+                    transition-colors duration-200 flex-shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -105,24 +106,33 @@ export const QuickMessages: React.FC<QuickMessagesProps> = ({
     const isFinalQuestion = questionLevel === 2;
 
     return (
-        <div className={`flex flex-col sm:flex-row gap-1.5 sm:gap-3 px-2 sm:px-6 py-2 sm:py-4 w-full 
+        <div className={`px-3 py-2 w-full 
             bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-t border-border
-            ${hideOnType ? 'animate-fadeOut' : 'animate-fadeIn'}
-            ${isFinalQuestion ? 'justify-center' : ''}`}>
-            {currentQuestions.map((question, index) => (
-                <QuickMessageButton
-                    key={`${question.message}-${index}`}
-                    icon={question.icon}
-                    title={question.title}
-                    description={question.description}
-                    message={question.message}
-                    messageAvatar={question.messageAvatar}
-                    nextQuestions={question.nextQuestions}
-                    onClick={onMessageSelect}
-                    disabled={isLoading}
-                    className={`${isFinalQuestion ? 'w-full sm:max-w-md' : 'flex-1'} min-h-[52px] sm:min-h-[auto]`}
-                />
-            ))}
+            ${hideOnType ? 'animate-fadeOut' : 'animate-fadeIn'}`}>
+            
+            {/* Compact grid layout for better space utilization */}
+            <div className={`grid gap-2 w-full
+                ${isFinalQuestion 
+                    ? 'grid-cols-1 max-w-md mx-auto' 
+                    : currentQuestions.length === 3 
+                        ? 'grid-cols-1 sm:grid-cols-3' 
+                        : 'grid-cols-1 sm:grid-cols-2'
+                }`}>
+                {currentQuestions.map((question, index) => (
+                    <QuickMessageButton
+                        key={`${question.message}-${index}`}
+                        icon={question.icon}
+                        title={question.title}
+                        description={question.description}
+                        message={question.message}
+                        messageAvatar={question.messageAvatar}
+                        nextQuestions={question.nextQuestions}
+                        onClick={onMessageSelect}
+                        disabled={isLoading}
+                        className="w-full"
+                    />
+                ))}
+            </div>
         </div>
     );
 }; 

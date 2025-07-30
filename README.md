@@ -72,10 +72,16 @@ VITE_ENV=production
 # backend/.env.development
 FRONTEND_DEV_URL=http://localhost:3000
 GEMINI_API_KEY=your_api_key_here
+EMAIL_ADDRESS=your_gmail@gmail.com
+EMAIL_PASSWORD=your_app_password_here
+YOUR_EMAIL=your_receiving_email@gmail.com
 
 # backend/.env.production
 FRONTEND_PROD_URL=https://frontend-240663900746.me-west1.run.app
 GEMINI_API_KEY=your_api_key_here
+EMAIL_ADDRESS=your_gmail@gmail.com
+EMAIL_PASSWORD=your_app_password_here
+YOUR_EMAIL=your_receiving_email@gmail.com
 ```
 
 ## Deployment
@@ -86,7 +92,10 @@ The application uses GitHub Actions for automated deployment to Google Cloud Run
 
 -   `GCP_PROJECT_ID`: Your Google Cloud project ID
 -   `GCP_SA_KEY`: Service account key with Cloud Run access
--   `GEMINI_API_KEY`: Your Gemini API key
+-   `GEMINI_API_KEY`: Gemini API key for production
+-   `EMAIL_ADDRESS`: Gmail address for SMTP
+-   `EMAIL_PASSWORD`: Gmail App Password (16-digit code)
+-   `YOUR_EMAIL`: Email address to receive contact form submissions
 
 ### Production URLs
 

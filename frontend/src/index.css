@@ -41,6 +41,14 @@ body {
     scrollbar-color: #2a2a2a #1e1e1e;
 }
 
+/* Line clamp utility */
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
 /* Prevent input focus flash */
 input:focus {
     @apply ring-2 ring-[#9d4edd] border-transparent;

@@ -34,6 +34,9 @@ backend/
 FRONTEND_DEV_URL=http://localhost:3000
 FRONTEND_VITE_URL=http://localhost:5173
 GEMINI_API_KEY=your_api_key_here
+EMAIL_ADDRESS=your_gmail@gmail.com
+EMAIL_PASSWORD=your_app_password_here
+YOUR_EMAIL=your_receiving_email@gmail.com
 ```
 
 ### Production
@@ -42,6 +45,9 @@ GEMINI_API_KEY=your_api_key_here
 # backend/.env.production
 FRONTEND_PROD_URL=https://frontend-240663900746.me-west1.run.app
 GEMINI_API_KEY=your_api_key_here
+EMAIL_ADDRESS=your_gmail@gmail.com
+EMAIL_PASSWORD=your_app_password_here
+YOUR_EMAIL=your_receiving_email@gmail.com
 ```
 
 ## API Endpoints
@@ -83,6 +89,9 @@ Required GitHub Secrets:
 -   `GCP_PROJECT_ID`: Google Cloud project identifier
 -   `GCP_SA_KEY`: Service account key with Cloud Run access
 -   `GEMINI_API_KEY`: Gemini API key for production
+-   `EMAIL_ADDRESS`: Gmail address for SMTP
+-   `EMAIL_PASSWORD`: Gmail App Password (16-digit code)
+-   `YOUR_EMAIL`: Email address to receive contact form submissions
 
 ### Manual Deployment (if needed)
 

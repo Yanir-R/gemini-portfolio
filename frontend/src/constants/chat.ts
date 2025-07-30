@@ -44,16 +44,36 @@ export const INITIAL_QUESTIONS: QuickMessageOption[] = [
         message: "What are your main skills?",
         nextQuestions: [
             {
-                icon: "🚀",
-                title: "Projects",
-                description: "See my work",
-                message: "Can you tell me about your projects?",
-            },
-            {
                 icon: "📈",
                 title: "Achievements",
                 description: "Key milestones",
                 message: "What are your main achievements?",
+            },
+            {
+                icon: "💡",
+                title: "Learning",
+                description: "Growth mindset",
+                message: "What are you currently learning?",
+            }
+        ]
+    },
+    {
+        icon: "🚀",
+        title: "Projects",
+        description: "Explore my work",
+        message: "Can you tell me about your projects and showcase some of your best work?",
+        nextQuestions: [
+            {
+                icon: "⭐",
+                title: "Featured",
+                description: "Top projects",
+                message: "What are your most impressive projects?",
+            },
+            {
+                icon: "🔧",
+                title: "Technologies",
+                description: "Tech used",
+                message: "What technologies did you use in your projects?",
             }
         ]
     }

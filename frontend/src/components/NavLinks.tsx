@@ -25,6 +25,7 @@ const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = "", o
 
     const links: NavLink[] = [
         { href: "/about", label: "About Me", icon: "🤵🏼" },
+        { href: "/projects", label: "Projects", icon: "🚀" },
         { href: "/blog", label: "Blog", icon: "📝" }
     ];
 

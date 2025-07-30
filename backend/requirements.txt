@@ -6,3 +6,4 @@ google-genai==1.7.0
 PyPDF2==3.0.1
 gunicorn==21.2.0
 google-cloud-storage==2.11.0
+email-validator==2.1.0

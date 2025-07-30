@@ -12,7 +12,7 @@ interface QuickMessageState {
 export const useChat = () => {
     const [message, setMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [hasFiles, setHasFiles] = useState(false);
+    const [hasFiles, setHasFiles] = useState<boolean | null>(null);
     const [showQuickMessages, setShowQuickMessages] = useState(true);
     const [quickMessageState, setQuickMessageState] = useState<QuickMessageState>({
         currentQuestions: INITIAL_QUESTIONS,

@@ -78,7 +78,7 @@ const Chat: React.FC = () => {
 
     // When hasFiles changes, also update isInitialLoading
     useEffect(() => {
-        if (hasFiles) {
+        if (hasFiles !== null) {
             setIsInitialLoading(false);
         }
     }, [hasFiles]);
@@ -196,13 +196,19 @@ const Chat: React.FC = () => {
                                     👱🏻‍♂️
                                 </span>
                             </div>
-                            <div className="flex gap-3 items-center px-4 py-1.5 rounded-full bg-[#1c1d29]/50 border border-border">
+                            <div 
+                                className="flex gap-3 items-center px-4 py-1.5 rounded-full bg-[#1c1d29]/50 border border-border cursor-pointer hover:bg-[#1c1d29]/70 transition-all duration-300"
+                                onClick={handleEnvelopeClick}
+                            >
                                 <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e] shadow-lg shadow-[#22c55e]/30 animate-pulse"></span>
                                 <span className="text-sm font-medium text-gray-300 pointer-events-none">Online</span>
                                 <div className="relative">
                                     <button
                                         ref={envelopeButtonRef}
-                                        onClick={handleEnvelopeClick}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEnvelopeClick();
+                                        }}
                                         className="group ml-2 p-1.5 rounded-full 
                                             hover:bg-brand-purple/10 
                                             relative
@@ -341,9 +347,9 @@ const Chat: React.FC = () => {
                             onChange={handleInputChange}
                             onFocus={() => scrollToBottom()}
                             placeholder={
-                                isInitialLoading
+                                isInitialLoading || hasFiles === null
                                     ? "Loading files..."
-                                    : !hasFiles
+                                    : hasFiles === false
                                         ? "⚠️ No files available"
                                         : isLoading
                                             ? "Waiting..."

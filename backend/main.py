@@ -1,8 +1,12 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from gemini_helper import get_gemini_response
-from docs_helper import load_all_files, read_markdown_file, DOCS_DIR, PRIVATE_DIR
+from docs_helper import (
+    load_all_files, read_markdown_file, DOCS_DIR, PRIVATE_DIR,
+    get_all_projects, get_project_by_slug, get_featured_projects, load_projects_content
+)
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 import os
@@ -14,7 +18,7 @@ import smtplib
 import json
 import logging
 import re
-from email_validator import validate_email, EmailNotValidError
+from email_validator import EmailNotValidError, validate_email  
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -87,15 +91,21 @@ async def health_check():
 @app.get("/check-paths")
 async def check_paths():
     """Debug endpoint to check paths"""
+    from docs_helper import PROJECTS_DIR
+    
     return {
         "docs_dir": DOCS_DIR,
         "private_dir": PRIVATE_DIR,
+        "projects_dir": PROJECTS_DIR,
         "docs_exists": os.path.exists(DOCS_DIR),
         "private_exists": os.path.exists(PRIVATE_DIR),
+        "projects_exists": os.path.exists(PROJECTS_DIR),
         "private_files": os.listdir(PRIVATE_DIR) if os.path.exists(PRIVATE_DIR) else [],
+        "project_files": os.listdir(PROJECTS_DIR) if os.path.exists(PROJECTS_DIR) else [],
         "current_working_dir": os.getcwd(),
         "absolute_docs_path": os.path.abspath(DOCS_DIR),
-        "absolute_private_path": os.path.abspath(PRIVATE_DIR)
+        "absolute_private_path": os.path.abspath(PRIVATE_DIR),
+        "absolute_projects_path": os.path.abspath(PROJECTS_DIR)
     }
 
 @app.post("/generate-text")
@@ -206,8 +216,11 @@ async def chat_with_files(chat_request: ChatRequest):
                 "email_collected": False
             }
         
-        # Normal chat flow
-        all_content = load_all_files()
+        # Normal chat flow - load all available content (documents + projects)
+        document_content = load_all_files()
+        project_content = load_projects_content()
+        combined_content = f"{document_content}\n\n{project_content}" if project_content else document_content
+        
         history = []
         if chat_request.conversation_history:
             history = [
@@ -223,7 +236,7 @@ async def chat_with_files(chat_request: ChatRequest):
         response = get_gemini_response(
             GEMINI_API_KEY,
             chat_request.message,
-            all_content,
+            combined_content,
             history
         )
         
@@ -307,7 +320,7 @@ def log_collected_email(email: str, context: str):
     try:
         log_entry = {
             "email": email,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.datetime.now().isoformat(),
             "context": context
         }
         
@@ -320,3 +333,39 @@ def log_collected_email(email: str, context: str):
     except Exception as e:
         logger.error(f"Failed to log email: {str(e)}")
         return False
+
+# Project endpoints
+@app.get("/api/projects")
+async def get_projects(featured_only: bool = False):
+    """Get all projects or only featured projects"""
+    try:
+        if featured_only:
+            projects = get_featured_projects()
+        else:
+            projects = get_all_projects()
+        
+        # Remove full content from listing to reduce payload size
+        for project in projects:
+            if 'content' in project:
+                del project['content']
+        
+        return {"projects": projects}
+    except Exception as e:
+        logger.error(f"Error fetching projects: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/projects/{slug}")
+async def get_project(slug: str):
+    """Get a specific project by slug"""
+    try:
+        project = get_project_by_slug(slug)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        return {"project": project}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching project {slug}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+

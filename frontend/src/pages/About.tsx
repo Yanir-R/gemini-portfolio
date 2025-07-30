@@ -27,7 +27,22 @@ const About: React.FC = () => {
     }, []);
 
     if (isLoading) {
-        return <div className="container px-4 py-8 mx-auto">Loading...</div>;
+        return (
+            <div className="pt-20 px-4 overflow-x-hidden">
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center py-12">
+                        <div className="text-6xl mb-6 animate-bounce">📄</div>
+                        <h2 className="text-2xl font-bold text-white mb-4">Loading my story...</h2>
+                        <p className="text-gray-400 mb-8">Fetching personal insights and experiences</p>
+                        <div className="flex items-center justify-center gap-2">
+                            <div className="w-3 h-3 bg-brand-purple rounded-full animate-pulse"></div>
+                            <div className="w-3 h-3 bg-brand-purple-light rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                            <div className="w-3 h-3 bg-brand-pink rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (error) {
@@ -35,7 +50,7 @@ const About: React.FC = () => {
     }
 
     return (
-        <div className="p-8 min-h-screen text-gray-300">
+        <div className="p-8 text-gray-300 overflow-x-hidden">
             <div className="mx-auto max-w-3xl">
                 <div className="p-4 rounded-lg border border-gray-700 shadow-lg bg-dark-terminal">
                     <div className="flex gap-2 items-center mb-4">
