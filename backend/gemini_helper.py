@@ -35,12 +35,13 @@ def get_gemini_response(
     pdf_content: Optional[str] = None, 
     conversation_history: Optional[List[Dict[str, str]]] = None
 ):
-    # Define fallback models in order of preference
+    # Fallback models in order of preference. The "-latest" aliases track the
+    # current generation, so a model retirement upstream does not break chat the
+    # way the pinned gemini-1.5-* names did.
     MODELS = [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro", 
-        "gemini-1.0-pro",
-        "gemini-pro"
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-flash-lite-latest",
     ]
     
     client = genai.Client(api_key=api_key)
@@ -215,14 +216,26 @@ def get_gemini_response(
             return response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
         
         except Exception as e:
-            print(f"Gemini API Error with model {model_id}: {str(e)}")
-            # Check if this is a 503 or overload error
-            if "503" in str(e) or "overloaded" in str(e).lower() or "unavailable" in str(e).lower():
-                print(f"Model {model_id} is overloaded, trying next model...")
+            error = str(e)
+            print(f"Gemini API Error with model {model_id}: {error}")
+
+            # Fall through to the next model when this one is unavailable to us:
+            # overloaded (503), retired/not found (404), or out of quota (429).
+            # Anything else is a request-level problem that retrying won't fix.
+            retryable = (
+                "503" in error
+                or "404" in error
+                or "429" in error
+                or "overloaded" in error.lower()
+                or "unavailable" in error.lower()
+                or "not found" in error.lower()
+                or "resource_exhausted" in error.lower()
+            )
+            if retryable:
+                print(f"Model {model_id} unavailable, trying next model...")
                 continue
-            else:
-                # For other errors, don't try other models
-                return f"I encountered an error while processing your request: {str(e)}"
+
+            return f"I encountered an error while processing your request: {error}"
     
     # If all models failed
     return "I'm sorry, all AI models are currently experiencing high demand. Please try again in a few moments." 

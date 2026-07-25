@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 const ReturnHome: React.FC = () => {
     const navigate = useNavigate();
@@ -16,7 +16,9 @@ const ReturnHome: React.FC = () => {
                      transition-all duration-300 hover:bg-gray-800/80 hover:scale-105 hover:border-purple-500/30"
             aria-label="Return to home page"
         >
-            <span className="text-purple-400 transition-transform duration-300 group-hover:-translate-x-1">←</span>
+            <span className="text-purple-400 transition-transform duration-300 group-hover:-translate-x-1">
+                ←
+            </span>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
                 cd ~/home
             </span>
@@ -24,4 +26,4 @@ const ReturnHome: React.FC = () => {
     );
 };
 
-export default ReturnHome; 
+export default ReturnHome;

@@ -16,11 +16,10 @@ const Chat: React.FC = () => {
         chatHistory,
         handleSendMessage,
         showQuickMessages,
-        quickMessageState
+        quickMessageState,
     } = useChat();
 
     const [isTyping, setIsTyping] = useState(false);
-    const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -32,7 +31,7 @@ const Chat: React.FC = () => {
 
     const handleQuickMessageSelect = async (
         message: string,
-        nextQuestions?: QuickMessageOption[],
+        nextQuestions?: QuickMessageOption[]
     ) => {
         await handleSendMessage(message, nextQuestions);
     };
@@ -55,7 +54,7 @@ const Chat: React.FC = () => {
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({
             behavior: 'smooth',
-            block: 'end'
+            block: 'end',
         });
     };
 
@@ -66,22 +65,6 @@ const Chat: React.FC = () => {
         const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
         setShowScrollButton(!isNearBottom);
     };
-
-    // Set initial loading to false after a few seconds or when hasFiles changes
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setIsInitialLoading(false);
-        }, 3000);
-
-        return () => clearTimeout(timer);
-    }, []);
-
-    // When hasFiles changes, also update isInitialLoading
-    useEffect(() => {
-        if (hasFiles !== null) {
-            setIsInitialLoading(false);
-        }
-    }, [hasFiles]);
 
     useEffect(() => {
         scrollToBottom();
@@ -149,23 +132,27 @@ const Chat: React.FC = () => {
                 handleEnvelopeClick={handleEnvelopeClick}
                 isMenuOpen={isMenuOpen}
             />
-            <div className={`
+            <div
+                className={`
                 flex flex-col 
-                ${isKeyboardVisible
-                    ? 'h-[calc(var(--vh,1vh)*80)]'
-                    : 'h-[calc(var(--vh,1vh)*100-15rem)]'
+                ${
+                    isKeyboardVisible
+                        ? 'h-[calc(var(--vh,1vh)*80)]'
+                        : 'h-[calc(var(--vh,1vh)*100-15rem)]'
                 } sm:h-[600px]
                 rounded-xl overflow-hidden 
                 bg-[#0a0b15] shadow-2xl border border-border
                 relative
                 transition-height duration-300 ease-in-out
-            `}>
+            `}
+            >
                 {/* Chat Header */}
                 <div className="flex items-center p-3 sm:p-4 bg-gradient-to-r from-[#13141f] to-[#1a1b26] border-b border-border backdrop-blur-lg relative">
                     <div className="flex flex-1 gap-3 items-center sm:gap-4">
                         <div className="relative group">
                             <div className="absolute inset-0 bg-gradient-to-br from-[#b65eff] to-[#9d4edd] rounded-2xl blur-xl opacity-0 group-hover:opacity-50 transition-all duration-500"></div>
-                            <div className="relative flex justify-center items-center w-11 h-11 rounded-2xl 
+                            <div
+                                className="relative flex justify-center items-center w-11 h-11 rounded-2xl 
                                 bg-gradient-to-br from-brand-purple to-[#7b2cbf] 
                                 hover:from-[#b65eff] hover:to-[#9d4edd]
                                 shadow-lg shadow-[#9d4edd]/20 
@@ -173,14 +160,17 @@ const Chat: React.FC = () => {
                                 transform hover:-translate-y-1
                                 animate-float
                                 transition-all duration-500 ease-out
-                                before:absolute before:inset-0 before:bg-gradient-to-br before:from-transparent before:to-brand-purple-light/20 before:rounded-2xl before:opacity-0 before:group-hover:opacity-100 before:transition-opacity before:duration-500">
+                                before:absolute before:inset-0 before:bg-gradient-to-br before:from-transparent before:to-brand-purple-light/20 before:rounded-2xl before:opacity-0 before:group-hover:opacity-100 before:transition-opacity before:duration-500"
+                            >
                                 <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#b65eff]/0 to-[#9d4edd]/0 group-hover:from-[#b65eff]/20 group-hover:to-[#9d4edd]/20 transition-all duration-500"></div>
-                                <span className="text-2xl relative z-10
+                                <span
+                                    className="text-2xl relative z-10
                                     transition-all duration-500
                                     group-hover:animate-disco
                                     transform group-hover:scale-110
                                     [text-shadow:_0_0_10px_rgb(157_78_221_/_50%)]
-                                    group-hover:[text-shadow:_0_0_20px_rgb(182_94_255_/_80%)]">
+                                    group-hover:[text-shadow:_0_0_20px_rgb(182_94_255_/_80%)]"
+                                >
                                     🪩
                                 </span>
                                 <div className="absolute -inset-1 bg-gradient-to-br from-[#b65eff]/0 to-[#9d4edd]/0 group-hover:from-[#b65eff]/10 group-hover:to-[#9d4edd]/10 rounded-3xl blur-xl transition-all duration-500"></div>
@@ -196,12 +186,14 @@ const Chat: React.FC = () => {
                                     👱🏻‍♂️
                                 </span>
                             </div>
-                            <div 
+                            <div
                                 className="flex gap-3 items-center px-4 py-1.5 rounded-full bg-[#1c1d29]/50 border border-border cursor-pointer hover:bg-[#1c1d29]/70 transition-all duration-300"
                                 onClick={handleEnvelopeClick}
                             >
                                 <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e] shadow-lg shadow-[#22c55e]/30 animate-pulse"></span>
-                                <span className="text-sm font-medium text-gray-300 pointer-events-none">Online</span>
+                                <span className="text-sm font-medium text-gray-300 pointer-events-none">
+                                    Online
+                                </span>
                                 <div className="relative">
                                     <button
                                         ref={envelopeButtonRef}
@@ -251,18 +243,27 @@ const Chat: React.FC = () => {
                     style={{
                         height: 'auto',
                         maxHeight: '100%',
-                        WebkitOverflowScrolling: 'touch'
+                        WebkitOverflowScrolling: 'touch',
                     }}
                 >
                     {/* Chat Messages */}
                     {chatHistory.map((msg, index) => (
-                        <div key={index} className="flex gap-2 items-start mb-4 pointer-events-none sm:gap-4 sm:mb-6 animate-fadeIn">
+                        <div
+                            key={index}
+                            className="flex gap-2 items-start mb-4 pointer-events-none sm:gap-4 sm:mb-6 animate-fadeIn"
+                        >
                             <MessageAvatar type={msg.type} />
-                            <div className={`rounded-2xl p-3 sm:p-4 max-w-[85%] sm:max-w-[80%] shadow-lg backdrop-blur-sm
-                                ${msg.type === 'user'
-                                    ? 'bg-gradient-to-br from-gradient-start to-brand-purple-dark shadow-brand-purple/20'
-                                    : 'bg-bg-card-start border border-border shadow-border/20'}`}>
-                                <p className="text-[16px] sm:text-[18px] leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
+                            <div
+                                className={`rounded-2xl p-3 sm:p-4 max-w-[85%] sm:max-w-[80%] shadow-lg backdrop-blur-sm
+                                ${
+                                    msg.type === 'user'
+                                        ? 'bg-gradient-to-br from-gradient-start to-brand-purple-dark shadow-brand-purple/20'
+                                        : 'bg-bg-card-start border border-border shadow-border/20'
+                                }`}
+                            >
+                                <p className="text-[16px] sm:text-[18px] leading-relaxed whitespace-pre-wrap break-words">
+                                    {msg.content}
+                                </p>
                             </div>
                         </div>
                     ))}
@@ -347,13 +348,13 @@ const Chat: React.FC = () => {
                             onChange={handleInputChange}
                             onFocus={() => scrollToBottom()}
                             placeholder={
-                                isInitialLoading || hasFiles === null
-                                    ? "Loading files..."
+                                hasFiles === null
+                                    ? 'Loading files...'
                                     : hasFiles === false
-                                        ? "⚠️ No files available"
-                                        : isLoading
-                                            ? "Waiting..."
-                                            : "Ask me anything..."
+                                      ? '⚠️ No files available'
+                                      : isLoading
+                                        ? 'Waiting...'
+                                        : 'Ask me anything...'
                             }
                             className="w-full py-2.5 sm:py-3 px-3 sm:px-4 pr-12
                                 bg-[#1c1d29] text-white placeholder-gray-400 

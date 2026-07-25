@@ -37,7 +37,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
 
@@ -84,7 +84,7 @@ jobs:
 
           # Create Dockerfile with the full build process
           cat > Dockerfile << 'EOL'
-          FROM node:20-alpine as builder
+          FROM node:22-alpine AS builder
           WORKDIR /app
           COPY package*.json ./
           RUN npm ci
@@ -113,7 +113,7 @@ jobs:
           !package.json
           !package-lock.json
           !tsconfig.json
-          !vite.config.ts
+          !vite.config.mts
           !tailwind.config.js
           !postcss.config.js
           !Dockerfile

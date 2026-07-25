@@ -16,67 +16,89 @@ export const useChat = () => {
     const [showQuickMessages, setShowQuickMessages] = useState(true);
     const [quickMessageState, setQuickMessageState] = useState<QuickMessageState>({
         currentQuestions: INITIAL_QUESTIONS,
-        level: 0
+        level: 0,
     });
 
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([
-        { type: 'initial', content: CHAT_CONFIG.INITIAL_MESSAGE }
+        { type: 'initial', content: CHAT_CONFIG.INITIAL_MESSAGE },
     ]);
 
     useEffect(() => {
+        // Guards against StrictMode's double-invoke appending the status message twice.
+        let cancelled = false;
+
         const initializeChat = async () => {
             try {
                 const response = await chatService.checkFiles();
+                if (cancelled) return;
+
                 setHasFiles(response.hasFiles);
 
                 if (!response.hasFiles) {
-                    setChatHistory(prev => [...prev, {
-                        type: 'system',
-                        content: "⚠️ No files are currently available in the system."
-                    }]);
+                    setChatHistory((prev) => [
+                        ...prev,
+                        {
+                            type: 'system',
+                            content: '⚠️ No files are currently available in the system.',
+                        },
+                    ]);
                 }
             } catch (error) {
+                if (cancelled) return;
+
                 console.error('Error checking files:', error);
                 setHasFiles(false);
-                setChatHistory(prev => [...prev, {
-                    type: 'system',
-                    content: "⚠️ Error initializing chat. Please refresh the page if the issue persists."
-                }]);
+                setChatHistory((prev) => [
+                    ...prev,
+                    {
+                        type: 'system',
+                        content:
+                            '⚠️ Error initializing chat. Please refresh the page if the issue persists.',
+                    },
+                ]);
             }
         };
 
         initializeChat();
+
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     const updateQuickMessages = (nextQuestions?: QuickMessageOption[]) => {
-        setQuickMessageState(prev => {
+        setQuickMessageState((prev) => {
             const nextLevel = prev.level + 1;
-            
+
             // If we're at level 0 and moving to level 1, show next questions
             if (nextLevel === 1 && nextQuestions) {
                 return {
                     currentQuestions: nextQuestions,
-                    level: nextLevel
+                    level: nextLevel,
                 };
             }
-            
+
             // If we're at level 1 moving to level 2, show final question
             if (nextLevel === 2) {
                 return {
                     currentQuestions: [FINAL_QUESTION],
-                    level: nextLevel
+                    level: nextLevel,
                 };
             }
-            
+
             // If we're beyond level 2, hide all quick messages
             return {
                 currentQuestions: [],
-                level: 3
+                level: 3,
             };
         });
     };
 
-    const handleSendMessage = async (messageText?: string, nextQuestions?: QuickMessageOption[], isEmailRelated?: boolean) => {
+    const handleSendMessage = async (
+        messageText?: string,
+        nextQuestions?: QuickMessageOption[],
+        isEmailRelated?: boolean
+    ) => {
         if (isLoading || (!messageText && !message.trim())) return;
 
         const finalMessage = messageText || message;
@@ -89,7 +111,7 @@ export const useChat = () => {
         if (!messageText || isEmailRelated) {
             setQuickMessageState({
                 currentQuestions: [],
-                level: 3
+                level: 3,
             });
         } else {
             updateQuickMessages(nextQuestions);
@@ -97,36 +119,45 @@ export const useChat = () => {
 
         try {
             // Add the message to chat history with correct type
-            setChatHistory(prev => [...prev, {
-                type: messageType,
-                content: finalMessage
-            }]);
+            setChatHistory((prev) => [
+                ...prev,
+                {
+                    type: messageType,
+                    content: finalMessage,
+                },
+            ]);
 
             const result = await chatService.sendMessage(finalMessage, chatHistory);
 
             if (result.success) {
                 if (result.email_collected) {
                     // Add the system confirmation message
-                    setChatHistory(prev => [...prev, {
-                        type: 'system',
-                        content: result.response || '',
-                        email_collected: true
-                    }]);
-                    
+                    setChatHistory((prev) => [
+                        ...prev,
+                        {
+                            type: 'system',
+                            content: result.response || '',
+                            email_collected: true,
+                        },
+                    ]);
+
                     // Reset quick message state and show initial questions
                     setQuickMessageState({
                         currentQuestions: INITIAL_QUESTIONS,
-                        level: 0
+                        level: 0,
                     });
                     setShowQuickMessages(true);
                 } else {
                     // Add AI response to chat history
-                    setChatHistory(prev => [...prev, {
-                        type: 'ai',
-                        content: result.response || '',
-                        is_email_collection: result.is_email_collection,
-                        email_collected: result.email_collected
-                    }]);
+                    setChatHistory((prev) => [
+                        ...prev,
+                        {
+                            type: 'ai',
+                            content: result.response || '',
+                            is_email_collection: result.is_email_collection,
+                            email_collected: result.email_collected,
+                        },
+                    ]);
 
                     // Only show quick messages if not in email collection mode
                     if (!result.is_email_collection) {
@@ -137,10 +168,13 @@ export const useChat = () => {
                     }
                 }
             } else {
-                setChatHistory(prev => [...prev, {
-                    type: 'system',
-                    content: `❌ ${result.error}`
-                }]);
+                setChatHistory((prev) => [
+                    ...prev,
+                    {
+                        type: 'system',
+                        content: `❌ ${result.error}`,
+                    },
+                ]);
             }
         } catch (error) {
             console.error('Error sending message:', error);
@@ -162,4 +196,4 @@ export const useChat = () => {
         showQuickMessages,
         quickMessageState,
     };
-}; 
+};

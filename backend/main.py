@@ -249,12 +249,22 @@ async def chat_with_files(chat_request: ChatRequest):
 @app.get("/api/content/{file_name}")
 async def get_content(file_name: str):
     try:
-        file_path = os.path.join(PRIVATE_DIR, file_name)
-        if not os.path.exists(file_path):
+        # Resolve and confine to PRIVATE_DIR. The router already refuses to match
+        # "/" inside a path param, but os.path.join() would silently honour an
+        # absolute path, so containment is asserted here rather than assumed.
+        private_root = os.path.realpath(PRIVATE_DIR)
+        file_path = os.path.realpath(os.path.join(private_root, file_name))
+
+        if os.path.commonpath([private_root, file_path]) != private_root:
             raise HTTPException(status_code=404, detail="File not found")
-        
+
+        if not os.path.isfile(file_path):
+            raise HTTPException(status_code=404, detail="File not found")
+
         content = read_markdown_file(file_path)
         return {"content": content}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -2,7 +2,6 @@ import React from 'react';
 import Chat from '@/components/Chat';
 
 const Home: React.FC = () => {
-    
     return (
         <div className="fixed inset-x-0 bottom-0 top-[64px] flex flex-col">
             <div className="container flex flex-col flex-1 px-4 mx-auto max-w-4xl">
@@ -25,4 +24,4 @@ const Home: React.FC = () => {
     );
 };
 
-export default Home; 
+export default Home;

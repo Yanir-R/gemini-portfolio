@@ -6,11 +6,7 @@ interface TypingAnimationProps {
     onComplete?: () => void;
 }
 
-const TypingAnimation: React.FC<TypingAnimationProps> = ({
-    content,
-    speed = 30,
-    onComplete
-}) => {
+const TypingAnimation: React.FC<TypingAnimationProps> = ({ content, speed = 30, onComplete }) => {
     const [displayedContent, setDisplayedContent] = useState('');
 
     const animate = useCallback(() => {
@@ -33,11 +29,7 @@ const TypingAnimation: React.FC<TypingAnimationProps> = ({
         return () => clearInterval(intervalId);
     }, [animate]);
 
-    return (
-        <div className="whitespace-pre-wrap">
-            {displayedContent}
-        </div>
-    );
+    return <div className="whitespace-pre-wrap">{displayedContent}</div>;
 };
 
-export default TypingAnimation; 
+export default TypingAnimation;

@@ -12,7 +12,7 @@ interface Particle {
 const ParticleBackground: React.FC = () => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const particlesRef = useRef<Particle[]>([]);
-    const animationFrameRef = useRef<number>();
+    const animationFrameRef = useRef<number | undefined>(undefined);
     const { isKeyboardVisible } = useScreenSize();
 
     useEffect(() => {
@@ -37,7 +37,7 @@ const ParticleBackground: React.FC = () => {
                     radius: Math.random() * 3 + 1,
                 });
             }
-            
+
             particlesRef.current = particles;
         };
 
@@ -65,7 +65,7 @@ const ParticleBackground: React.FC = () => {
             ctx.fillStyle = 'rgba(17, 24, 39, 1)';
             ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
 
-            particlesRef.current.forEach(particle => {
+            particlesRef.current.forEach((particle) => {
                 // Draw particle
                 ctx.beginPath();
                 ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
@@ -77,10 +77,10 @@ const ParticleBackground: React.FC = () => {
                 particle.y += particle.dy;
 
                 // Connect particles within 150px
-                particlesRef.current.forEach(otherParticle => {
+                particlesRef.current.forEach((otherParticle) => {
                     const distance = Math.sqrt(
                         Math.pow(particle.x - otherParticle.x, 2) +
-                        Math.pow(particle.y - otherParticle.y, 2)
+                            Math.pow(particle.y - otherParticle.y, 2)
                     );
 
                     if (distance < 150) {
@@ -128,4 +128,4 @@ const ParticleBackground: React.FC = () => {
     );
 };
 
-export default ParticleBackground; 
+export default ParticleBackground;

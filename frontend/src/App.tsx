@@ -1,12 +1,12 @@
-import React from 'react'
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import NavBar from '@/components/NavBar'
-import Home from '@/pages/Home'
-import About from '@/pages/About'
-import Blog from '@/pages/Blog'
-import Projects from '@/pages/Projects'
-import ProjectDetail from '@/pages/ProjectDetail'
-import ParticleBackground from '@/components/ParticleBackground'
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router';
+import NavBar from '@/components/NavBar';
+import Home from '@/pages/Home';
+import About from '@/pages/About';
+import Blog from '@/pages/Blog';
+import Projects from '@/pages/Projects';
+import ProjectDetail from '@/pages/ProjectDetail';
+import ParticleBackground from '@/components/ParticleBackground';
 
 const App: React.FC = () => {
     return (
@@ -25,7 +25,7 @@ const App: React.FC = () => {
                 </div>
             </div>
         </Router>
-    )
-}
+    );
+};
 
-export default App 
+export default App;
