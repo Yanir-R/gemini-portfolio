@@ -15,7 +15,53 @@ env:
   FRONTEND_DIR: frontend
 
 jobs:
+  # Runs on pull requests and pushes. This is the job that gates a PR — it must
+  # not need cloud credentials, and it must not deploy anything.
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm run typecheck
+
+      - name: Lint
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm run lint
+
+      - name: Check formatting
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm run format:check
+
+      - name: Build
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm run build
+
+      - name: Audit dependencies
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm audit --audit-level=high
+
+  # Deploys only on push to main/prod. Both branches target the same fixed Cloud
+  # Run service names, so running this for a pull request would overwrite the
+  # shared environment with unreviewed code.
   deploy:
+    if: github.event_name == 'push'
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
