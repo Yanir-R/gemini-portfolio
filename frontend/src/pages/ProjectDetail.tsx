@@ -20,6 +20,7 @@ const ProjectDetail: React.FC = () => {
         const fetchProject = async (projectSlug: string) => {
             try {
                 setLoading(true);
+                setError(null);
                 const fetchedProject = await projectService.getProjectBySlug(projectSlug);
                 if (!cancelled) setProject(fetchedProject);
             } catch (err) {
