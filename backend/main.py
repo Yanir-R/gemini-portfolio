@@ -47,14 +47,35 @@ FRONTEND_DEV_URL = getenv("FRONTEND_DEV_URL", "http://localhost:3000")
 FRONTEND_VITE_URL = getenv("FRONTEND_VITE_URL", "http://127.0.0.1:3000")
 BACKEND_URL = getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
-allowed_origins = [
+# Local dev hosts are always permitted. Deployed origins are assembled from the
+# FRONTEND_* vars above plus a comma-separated ALLOWED_ORIGINS, so pointing the
+# API at a new frontend host (Cloudflare Pages, a custom domain) is a config
+# change rather than a code change. No wildcard: allow_credentials is enabled.
+_DEV_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://frontend-240663900746.me-west1.run.app"
 ]
+
+
+def _build_allowed_origins() -> List[str]:
+    configured = [FRONTEND_PROD_URL, FRONTEND_DEV_URL, FRONTEND_VITE_URL]
+    configured += getenv("ALLOWED_ORIGINS", "").split(",")
+
+    origins: List[str] = []
+    seen = set()
+    for origin in _DEV_ORIGINS + configured:
+        origin = origin.strip().rstrip("/")
+        if origin and origin not in seen:
+            seen.add(origin)
+            origins.append(origin)
+    return origins
+
+
+allowed_origins = _build_allowed_origins()
+logger.info("CORS allowed origins: %s", allowed_origins)
 
 class ChatMessage(BaseModel):
     type: str
