@@ -1,4 +1,4 @@
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 import os
 import re
 from typing import List, Optional, Dict, Any

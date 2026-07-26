@@ -1,8 +1,8 @@
 import React from 'react';
-import { apiClient } from '../api/client';
-import { API_ENDPOINTS } from '../api/endpoints';
-import TypingAnimation from '../components/TypingAnimation';
-import ReturnHome from '../components/ReturnHome';
+import { apiClient } from '@/api/client';
+import { API_ENDPOINTS } from '@/api/endpoints';
+import TypingAnimation from '@/components/TypingAnimation';
+import ReturnHome from '@/components/ReturnHome';
 
 const About: React.FC = () => {
     const [content, setContent] = React.useState<string>('');
@@ -14,7 +14,9 @@ const About: React.FC = () => {
         const fetchContent = async () => {
             try {
                 setIsLoading(true);
-                const response = await apiClient.get(API_ENDPOINTS.GET_MARKDOWN_CONTENT('about-me.md'));
+                const response = await apiClient.get(
+                    API_ENDPOINTS.GET_MARKDOWN_CONTENT('about-me.md')
+                );
                 setContent(response.data.content);
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'An error occurred');
@@ -33,11 +35,19 @@ const About: React.FC = () => {
                     <div className="text-center py-12">
                         <div className="text-6xl mb-6 animate-bounce">📄</div>
                         <h2 className="text-2xl font-bold text-white mb-4">Loading my story...</h2>
-                        <p className="text-gray-400 mb-8">Fetching personal insights and experiences</p>
+                        <p className="text-gray-400 mb-8">
+                            Fetching personal insights and experiences
+                        </p>
                         <div className="flex items-center justify-center gap-2">
                             <div className="w-3 h-3 bg-brand-purple rounded-full animate-pulse"></div>
-                            <div className="w-3 h-3 bg-brand-purple-light rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                            <div className="w-3 h-3 bg-brand-pink rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                            <div
+                                className="w-3 h-3 bg-brand-purple-light rounded-full animate-pulse"
+                                style={{ animationDelay: '0.2s' }}
+                            ></div>
+                            <div
+                                className="w-3 h-3 bg-brand-pink rounded-full animate-pulse"
+                                style={{ animationDelay: '0.4s' }}
+                            ></div>
                         </div>
                     </div>
                 </div>
@@ -98,4 +108,4 @@ const About: React.FC = () => {
     );
 };
 
-export default About; 
+export default About;

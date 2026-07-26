@@ -1,6 +1,29 @@
 from google import genai
+from google.genai import errors as genai_errors
 from typing import Optional, List, Dict
+import logging
 import re
+
+logger = logging.getLogger(__name__)
+
+# Status codes that mean "this model is not usable for us right now", so the next
+# candidate is worth trying: retired/unknown model, exhausted quota, or a
+# transient server-side failure.
+RETRYABLE_STATUS_CODES = frozenset({404, 429, 500, 502, 503, 504})
+
+# User-facing copy per failure category, so an auth or configuration problem is
+# not reported to visitors as if the service were merely busy.
+BUSY_MESSAGE = (
+    "I'm sorry, the AI service is busy or over its quota right now. "
+    "Please try again in a few moments."
+)
+MISCONFIGURED_MESSAGE = (
+    "I'm sorry, the AI service is not configured correctly at the moment. "
+    "Please try again later."
+)
+GENERIC_ERROR_MESSAGE = (
+    "I'm sorry, I couldn't process your request just now. Please try again."
+)
 
 def validate_email(email: str) -> tuple[bool, str]:
     """
@@ -35,12 +58,13 @@ def get_gemini_response(
     pdf_content: Optional[str] = None, 
     conversation_history: Optional[List[Dict[str, str]]] = None
 ):
-    # Define fallback models in order of preference
+    # Fallback models in order of preference. The "-latest" aliases track the
+    # current generation, so a model retirement upstream does not break chat the
+    # way the pinned gemini-1.5-* names did.
     MODELS = [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro", 
-        "gemini-1.0-pro",
-        "gemini-pro"
+        "gemini-flash-latest",
+        "gemini-3.5-flash",
+        "gemini-flash-lite-latest",
     ]
     
     client = genai.Client(api_key=api_key)
@@ -137,6 +161,7 @@ def get_gemini_response(
     }
 
     # Try each model until one works
+    last_error: Optional[Exception] = None
     for model_id in MODELS:
         try:
             # Generate appropriate prompt based on context
@@ -215,14 +240,33 @@ def get_gemini_response(
             return response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
         
         except Exception as e:
-            print(f"Gemini API Error with model {model_id}: {str(e)}")
-            # Check if this is a 503 or overload error
-            if "503" in str(e) or "overloaded" in str(e).lower() or "unavailable" in str(e).lower():
-                print(f"Model {model_id} is overloaded, trying next model...")
+            last_error = e
+            logger.exception("Gemini API error with model %s", model_id)
+
+            # Decide from the SDK's structured status code rather than substring
+            # matching, so an unrelated message containing "404" cannot be
+            # mistaken for a retired model.
+            status_code = e.code if isinstance(e, genai_errors.APIError) else None
+
+            if status_code in RETRYABLE_STATUS_CODES:
+                logger.warning(
+                    "Model %s unavailable (HTTP %s), trying next model", model_id, status_code
+                )
                 continue
-            else:
-                # For other errors, don't try other models
-                return f"I encountered an error while processing your request: {str(e)}"
-    
-    # If all models failed
-    return "I'm sorry, all AI models are currently experiencing high demand. Please try again in a few moments." 
+
+            # Anything else (auth, malformed request, network) is not a
+            # model-availability problem, so trying another model won't help.
+            return _failure_message(e)
+
+    # Every candidate model failed; report the category of the last failure.
+    return _failure_message(last_error)
+
+
+def _failure_message(error: Optional[Exception]) -> str:
+    """Maps a failure to user-facing copy without leaking the raw error text."""
+    if isinstance(error, genai_errors.APIError):
+        if error.code in (429, 503):
+            return BUSY_MESSAGE
+        if error.code in (400, 401, 403, 404):
+            return MISCONFIGURED_MESSAGE
+    return GENERIC_ERROR_MESSAGE

@@ -1,7 +1,7 @@
 export const getProjectTerminalContent = (slug: string): string | null => {
-  switch (slug) {
-    case 'reelsensei':
-      return `# ReelSensei - AI Gaming Highlights
+    switch (slug) {
+        case 'reelsensei':
+            return `# ReelSensei - AI Gaming Highlights
 
 🎮 AI-Powered Gaming Video Highlight Generation
 
@@ -64,10 +64,10 @@ architecture for optimal performance and scalability.
 • Microservice architecture with clean separation
 • Production-ready with Google Cloud Run deployment
 
-Built with ❤️ for the gaming community`
+Built with ❤️ for the gaming community`;
 
-    case 'ai-chat-portfolio':
-      return `# AI Chat Portfolio
+        case 'ai-chat-portfolio':
+            return `# AI Chat Portfolio
 
 🤖 Intelligent Portfolio Website with AI Assistant
 
@@ -136,9 +136,9 @@ The application follows clean separation of concerns:
 • Production-ready deployment
 • Scalable cloud architecture
 
-Built to showcase modern full-stack development skills`
+Built to showcase modern full-stack development skills`;
 
-    default:
-      return null
-  }
-} 
+        default:
+            return null;
+    }
+};

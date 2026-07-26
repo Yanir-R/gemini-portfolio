@@ -12,14 +12,15 @@ export const useScreenSize = () => {
         isMobile: false,
         isTablet: false,
         isKeyboardVisible: false,
-        safeAreaBottom: 0
+        safeAreaBottom: 0,
     });
 
     useEffect(() => {
         // Initialize viewport meta for mobile
         const metaViewport = document.querySelector('meta[name=viewport]');
         if (metaViewport) {
-            metaViewport.setAttribute('content', 
+            metaViewport.setAttribute(
+                'content',
                 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover'
             );
         }
@@ -52,7 +53,7 @@ export const useScreenSize = () => {
                 isMobile,
                 isTablet,
                 isKeyboardVisible,
-                safeAreaBottom
+                safeAreaBottom,
             });
         };
 
@@ -70,4 +71,4 @@ export const useScreenSize = () => {
     }, []);
 
     return screenState;
-}; 
+};

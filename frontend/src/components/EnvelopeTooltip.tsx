@@ -7,9 +7,14 @@ interface EnvelopeTooltipProps {
     isMenuOpen?: boolean;
 }
 
-export const EnvelopeTooltip: React.FC<EnvelopeTooltipProps> = ({ show, buttonRect, handleEnvelopeClick, isMenuOpen = false }) => {
+export const EnvelopeTooltip: React.FC<EnvelopeTooltipProps> = ({
+    show,
+    buttonRect,
+    handleEnvelopeClick,
+    isMenuOpen = false,
+}) => {
     if (!show || !buttonRect) return null;
-    
+
     // Hide tooltip completely when menu is open on mobile
     if (isMenuOpen && window.innerWidth < 1024) return null;
 
@@ -17,33 +22,33 @@ export const EnvelopeTooltip: React.FC<EnvelopeTooltipProps> = ({ show, buttonRe
     const tooltipWidth = 200; // Approximate tooltip width
     const viewportWidth = window.innerWidth;
     const padding = 16; // Safe padding from screen edges
-    
+
     const originalLeft = buttonRect.left - 15;
     let leftPosition = originalLeft;
-    
+
     // Adjust if tooltip would go off the right edge
     if (leftPosition + tooltipWidth > viewportWidth - padding) {
         leftPosition = viewportWidth - tooltipWidth - padding;
     }
-    
+
     // Adjust if tooltip would go off the left edge
     if (leftPosition < padding) {
         leftPosition = padding;
     }
 
     // Calculate arrow position relative to the button
-    const buttonCenter = buttonRect.left + (buttonRect.width / 2);
+    const buttonCenter = buttonRect.left + buttonRect.width / 2;
     const arrowLeft = Math.max(12, Math.min(tooltipWidth - 12, buttonCenter - leftPosition));
 
     return createPortal(
-        <div 
+        <div
             className={`fixed animate-fadeIn ${isMenuOpen ? 'z-[10]' : 'z-[30]'}`}
             style={{
                 top: `${buttonRect.top - 85}px`,
                 left: `${leftPosition}px`,
             }}
         >
-            <div 
+            <div
                 className="px-4 py-2.5 text-sm font-medium
                     bg-[#0f1218] 
                     text-white rounded-md
@@ -72,13 +77,13 @@ export const EnvelopeTooltip: React.FC<EnvelopeTooltipProps> = ({ show, buttonRe
                         handleEnvelopeClick();
                     }
                 }}
-                >
+            >
                 <div className="flex gap-3 items-center pl-2">
                     <span className="animate-bounce">
                         Click to send me an email{window.innerWidth >= 768 ? ' 📧' : ''}
                     </span>
                 </div>
-                <div 
+                <div
                     className="absolute -bottom-[6px] w-3 h-3 
                         bg-[#0f1218]
                         border-r border-b border-[#9d4edd]/30
@@ -90,4 +95,4 @@ export const EnvelopeTooltip: React.FC<EnvelopeTooltipProps> = ({ show, buttonRe
         </div>,
         document.body
     );
-}; 
+};

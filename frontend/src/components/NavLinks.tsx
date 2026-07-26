@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router';
 
 interface NavLink {
     href: string;
@@ -13,7 +13,7 @@ interface NavLinksProps {
     onNavigate?: () => void;
 }
 
-const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = "", onNavigate }) => {
+const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = '', onNavigate }) => {
     const location = useLocation();
     const isHomePage = location.pathname === '/';
 
@@ -24,22 +24,23 @@ const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = "", o
     };
 
     const links: NavLink[] = [
-        { href: "/about", label: "About Me", icon: "🤵🏼" },
-        { href: "/projects", label: "Projects", icon: "🚀" },
-        { href: "/blog", label: "Blog", icon: "📝" }
+        { href: '/about', label: 'About Me', icon: '🤵🏼' },
+        { href: '/projects', label: 'Projects', icon: '🚀' },
+        { href: '/blog', label: 'Blog', icon: '📝' },
     ];
 
     const baseStyles = isMobile
-        ? "block w-full px-4 py-3 text-lg font-medium text-gray-300 transition-all duration-300 bg-dark-secondary hover:bg-[#2a2a2a] rounded-lg border border-transparent hover:border-border-hover"
-        : "relative text-base text-gray-300 transition-all duration-300 hover:text-white";
+        ? 'block w-full px-4 py-3 text-lg font-medium text-gray-300 transition-all duration-300 bg-dark-secondary hover:bg-[#2a2a2a] rounded-lg border border-transparent hover:border-border-hover'
+        : 'relative text-base text-gray-300 transition-all duration-300 hover:text-white';
 
     const underlineStyles = !isMobile
         ? "before:content-[''] before:absolute before:w-0 before:h-[2px] before:bottom-[-4px] before:left-0 before:transition-all before:duration-300 hover:before:w-full before:bg-gradient-to-r before:from-purple-400 before:to-pink-600 hover:before:bg-gradient-to-r hover:before:from-cyan-500 hover:before:to-blue-500"
-        : "";
+        : '';
 
     return (
-        <div className={`${isMobile ? 'p-4 space-y-3' : 'flex space-x-8 text-base font-medium'} ${className}`}>
-
+        <div
+            className={`${isMobile ? 'p-4 space-y-3' : 'flex space-x-8 text-base font-medium'} ${className}`}
+        >
             {isMobile && !isHomePage && (
                 <NavLink
                     to="/"
@@ -52,7 +53,7 @@ const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = "", o
                     </span>
                 </NavLink>
             )}
-            
+
             {links.map((link) => (
                 <NavLink
                     key={link.href}
@@ -78,4 +79,4 @@ const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = "", o
     );
 };
 
-export default NavLinks; 
+export default NavLinks;

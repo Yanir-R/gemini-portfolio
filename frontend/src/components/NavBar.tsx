@@ -29,18 +29,23 @@ const NavBar: React.FC = () => {
     return (
         <>
             {/* Spacer div - different height for mobile */}
-            <div className={`h-16 lg:h-20 transition-all duration-300 ${isMenuOpen ? 'mb-[280px]' : ''}`}></div>
+            <div
+                className={`h-16 lg:h-20 transition-all duration-300 ${isMenuOpen ? 'mb-[280px]' : ''}`}
+            ></div>
 
-            <nav className={`
+            <nav
+                className={`
                 fixed top-0 left-0 right-0 z-50 font-sans
                 transition-all duration-300 ease-in-out
-                ${scrolled
-                    ? 'border-b shadow-lg backdrop-blur-md bg-gray-900/80 border-purple-500/10'
-                    : 'bg-transparent backdrop-blur-sm'}
-            `}>
+                ${
+                    scrolled
+                        ? 'border-b shadow-lg backdrop-blur-md bg-gray-900/80 border-purple-500/10'
+                        : 'bg-transparent backdrop-blur-sm'
+                }
+            `}
+            >
                 <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16 lg:h-20">
-
                         <div className="flex items-center">
                             <a
                                 href="/"
@@ -88,7 +93,9 @@ const NavBar: React.FC = () => {
                                     <div className="w-3 h-3 rounded-full shadow-lg bg-status-warning/90 shadow-yellow-500/20"></div>
                                     <div className="w-3 h-3 rounded-full shadow-lg bg-status-online/90 shadow-green-500/20"></div>
                                 </div>
-                                <span className="ml-2 font-mono text-sm text-gray-400">~/navigation</span>
+                                <span className="ml-2 font-mono text-sm text-gray-400">
+                                    ~/navigation
+                                </span>
                             </div>
                             <div className="transform transition-all duration-300 hover:scale-[1.01]">
                                 <NavLinks isMobile onNavigate={closeMenu} />
@@ -105,4 +112,4 @@ const NavBar: React.FC = () => {
     );
 };
 
-export default NavBar; 
+export default NavBar;
