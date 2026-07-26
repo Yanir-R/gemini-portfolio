@@ -11,24 +11,29 @@
             content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
         />
 
+        <!-- %VITE_SITE_URL% is substituted at build time from VITE_SITE_URL,
+             defaulting to the deployed origin. Set it to the real domain rather
+             than hardcoding a host here. -->
+        <link rel="canonical" href="%VITE_SITE_URL%/" />
+
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://yanir.dev/" />
+        <meta property="og:url" content="%VITE_SITE_URL%/" />
         <meta property="og:title" content="Yanir.dev" />
         <meta
             property="og:description"
             content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
         />
-        <meta property="og:image" content="https://yanir.dev/preview-image.jpg" />
-        <!-- TODO: Add a preview image -->
+        <!-- TODO: add public/preview-image.jpg — this URL 404s until then. -->
+        <meta property="og:image" content="%VITE_SITE_URL%/preview-image.jpg" />
 
         <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://yanir.dev/" />
+        <meta property="twitter:url" content="%VITE_SITE_URL%/" />
         <meta property="twitter:title" content="Yanir.dev" />
         <meta
             property="twitter:description"
             content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
         />
-        <meta property="twitter:image" content="https://yanir.dev/preview-image.jpg" />
+        <meta property="twitter:image" content="%VITE_SITE_URL%/preview-image.jpg" />
     </head>
     <body>
         <div id="root"></div>

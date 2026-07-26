@@ -93,6 +93,8 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         env:
           VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL }}
+          # Unset falls back to the deployed origin in vite.config.mts.
+          VITE_SITE_URL: ${{ vars.SITE_URL }}
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
@@ -148,7 +150,7 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         env:
           VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL }}
-          VITE_ENV: ${{ env.ENVIRONMENT }}
+          VITE_SITE_URL: ${{ vars.SITE_URL }}
         run: npm run build
 
       - name: Google Auth
