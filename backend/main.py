@@ -23,6 +23,11 @@ from email_validator import EmailNotValidError, validate_email
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Unexpected exceptions are logged server-side with a stack trace and reported to
+# clients as this opaque string, so internal paths and configuration details are
+# never reflected back in an error response.
+INTERNAL_ERROR_DETAIL = "Internal server error"
+
 load_dotenv()
 
 def validate_email_config():
@@ -116,8 +121,11 @@ async def chat(chat_request: ChatRequest):
             
         response = get_gemini_response(GEMINI_API_KEY, chat_request.message)
         return {"response": response}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("generate_text failed")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 @app.post("/chat-with-files")
 async def chat_with_files(chat_request: ChatRequest):
@@ -242,9 +250,11 @@ async def chat_with_files(chat_request: ChatRequest):
         
         return {"response": response}
         
-    except Exception as e:
-        logger.error(f"Error in chat_with_files: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error in chat_with_files")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 @app.get("/api/content/{file_name}")
 async def get_content(file_name: str):
@@ -265,8 +275,9 @@ async def get_content(file_name: str):
         return {"content": content}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("get_content failed for %r", file_name)
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 @app.post("/api/contact")
 async def contact(request: ContactRequest):
@@ -321,9 +332,11 @@ async def contact(request: ContactRequest):
         log_collected_email(str(request.email), request.message)
 
         return {"status": "success", "message": "Email sent successfully"}
-    except Exception as e:
-        logger.error(f"Contact endpoint error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Contact endpoint error")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 # Add this function to handle email logging
 def log_collected_email(email: str, context: str):
@@ -360,9 +373,9 @@ async def get_projects(featured_only: bool = False):
                 del project['content']
         
         return {"projects": projects}
-    except Exception as e:
-        logger.error(f"Error fetching projects: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error fetching projects")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 @app.get("/api/projects/{slug}")
 async def get_project(slug: str):
@@ -375,7 +388,7 @@ async def get_project(slug: str):
         return {"project": project}
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Error fetching project {slug}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Error fetching project %r", slug)
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
