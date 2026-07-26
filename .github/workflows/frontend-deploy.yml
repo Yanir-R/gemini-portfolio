@@ -85,11 +85,14 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         run: npm ci
 
+      # Deliberately rebuilds rather than reusing verify's dist/. VITE_BACKEND_URL
+      # is inlined into the bundle at build time, and verify builds without
+      # secrets, so its output hardcodes the vite.config fallback URL. Sharing
+      # that artifact would deploy a frontend pointing at the wrong backend.
       - name: Build
         working-directory: ${{ env.FRONTEND_DIR }}
         env:
           VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL }}
-          VITE_ENV: ${{ github.ref_name == 'prod' && 'production' || 'development' }}
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
