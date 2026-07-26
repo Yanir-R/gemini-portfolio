@@ -56,9 +56,62 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         run: npm audit --audit-level=high
 
-  # Deploys only on push to main/prod. Both branches target the same fixed Cloud
-  # Run service names, so running this for a pull request would overwrite the
-  # shared environment with unreviewed code.
+  # Cloudflare Pages deploy. The frontend is a static bundle, so it belongs on a
+  # CDN rather than in an nginx container on Cloud Run.
+  #
+  # Dormant until the repository variable CLOUDFLARE_PAGES_ENABLED is set to
+  # "true", so this cannot fail pushes while the Cloudflare project and secrets
+  # are still being set up. Once Pages serves the domain, the `deploy` job below
+  # (and frontend/Dockerfile + nginx.conf) can be deleted.
+  deploy-pages:
+    if: github.event_name == 'push' && vars.CLOUDFLARE_PAGES_ENABLED == 'true'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ${{ env.FRONTEND_DIR }}/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ${{ env.FRONTEND_DIR }}
+        run: npm ci
+
+      # Deliberately rebuilds rather than reusing verify's dist/. VITE_BACKEND_URL
+      # is inlined into the bundle at build time, and verify builds without
+      # secrets, so its output hardcodes the vite.config fallback URL. Sharing
+      # that artifact would deploy a frontend pointing at the wrong backend.
+      - name: Build
+        working-directory: ${{ env.FRONTEND_DIR }}
+        env:
+          VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL }}
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: ${{ env.FRONTEND_DIR }}
+          # --branch drives Pages' production vs preview split; set the Pages
+          # project's production branch to `prod` to mirror the Cloud Run flow.
+          command: >-
+            pages deploy dist
+            --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+            --branch=${{ github.ref_name }}
+
+  # Legacy Cloud Run deploy, kept until the Pages cutover is confirmed.
+  # Deploys only on push to main/prod: both branches target the same fixed
+  # service name, so running this for a pull request would overwrite the shared
+  # environment with unreviewed code.
   deploy:
     if: github.event_name == 'push'
     needs: verify
