@@ -1,172 +1,115 @@
 # AI Portfolio Backend
 
-FastAPI backend service deployed on Google Cloud Run with automated GitHub Actions deployment.
+FastAPI service on Google Cloud Run. Answers chat questions grounded in local markdown via the Gemini API, serves project data, and forwards contact emails.
 
-## Project Structure
+## Project structure
 
-```bash
+```
 backend/
 ├── docs/
-│   ├── private/     # Private markdown files (resume, about-me)
-│   └── templates/   # Template files
-├── main.py         # FastAPI application
-├── gemini_helper.py # Gemini AI integration
-├── docs_helper.py  # Documentation handling
-├── requirements.txt # Python dependencies
-└── Dockerfile      # Container configuration
+│   ├── private/       # markdown the assistant reads — see warning below
+│   ├── projects/      # per-project markdown, drives /api/projects
+│   └── templates/
+├── main.py            # FastAPI app, routes, CORS
+├── gemini_helper.py   # Gemini integration, model fallback
+├── docs_helper.py     # markdown/PDF loading
+├── rate_limit.py      # per-client + global rate limiting
+├── requirements.txt
+└── Dockerfile
 ```
 
-## Technical Stack
+> **Warning:** `docs/private/` is **tracked in this public repository** despite its name. Anything in it is world-readable on GitHub and served over `/api/content/`. Do not put anything there you would not publish.
 
--   FastAPI: Web framework
--   Python 3.8+: Runtime environment
--   Gemini AI: Language model
--   PyPDF2: PDF processing
--   Google Cloud Run: Deployment platform
--   GitHub Actions: CI/CD automation
+## Technical stack
 
-## Environment Configuration
+FastAPI 0.140 · Python 3.12 · uvicorn · google-genai 2.x · pypdf · Cloud Run
 
-### Development
+Python 3.9 is EOL and cannot install the current requirements — every dependency fix in the last update required >= 3.10. `PyPDF2` was replaced by `pypdf` (same `PdfReader` API); PyPDF2 is EOL and its advisories are unfixable.
+
+## Local development
 
 ```bash
-# backend/.env.development
-FRONTEND_DEV_URL=http://localhost:3000
-FRONTEND_VITE_URL=http://localhost:5173
-GEMINI_API_KEY=your_api_key_here
-EMAIL_ADDRESS=your_gmail@gmail.com
-EMAIL_PASSWORD=your_app_password_here
-YOUR_EMAIL=your_receiving_email@gmail.com
-```
-
-### Production
-
-```bash
-# backend/.env.production
-FRONTEND_PROD_URL=https://frontend-240663900746.me-west1.run.app
-GEMINI_API_KEY=your_api_key_here
-EMAIL_ADDRESS=your_gmail@gmail.com
-EMAIL_PASSWORD=your_app_password_here
-YOUR_EMAIL=your_receiving_email@gmail.com
-```
-
-## API Endpoints
-
--   `GET /health`: Service health check and status
--   `GET /check-paths`: Document system verification
--   `POST /chat-with-files`: Context-aware AI chat
--   `GET /api/content/{file_name}`: Markdown content retrieval
-
-## Local Development
-
-1. Create virtual environment:
-
-```bash
-python3 -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-```
-
-2. Install dependencies:
-
-```bash
+python3.12 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
 ```
 
-3. Run development server:
+Run a **single process**. `rate_limit.py` keeps counters in-process, so N workers multiply the global ceiling by N — see the note in `Dockerfile` before changing the run command.
+
+## Configuration
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# backend/.env  (gitignored — never commit)
+GEMINI_API_KEY=...
+EMAIL_ADDRESS=your_gmail@gmail.com
+EMAIL_PASSWORD=...        # Gmail App Password, not the account password
+YOUR_EMAIL=where_contact_mail_lands@gmail.com
 ```
+
+Optional:
+
+| Variable | Effect |
+| --- | --- |
+| `ALLOWED_ORIGINS` | Comma-separated origins added to the CORS allowlist |
+| `FRONTEND_PROD_URL`, `FRONTEND_DEV_URL`, `FRONTEND_VITE_URL` | Individual origins |
+
+Localhost origins are always allowed. There is no wildcard origin — `allow_credentials` is enabled, so the allowlist stays explicit.
+
+### Rate limiting
+
+The chat and contact endpoints are unauthenticated and cost quota or money per call. Two windows are enforced:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RATE_LIMIT_CHAT_PER_IP_PER_MINUTE` | 10 | one abuser cannot deny service to others |
+| `RATE_LIMIT_CHAT_GLOBAL_PER_MINUTE` | 40 | caps upstream calls regardless of source address |
+| `RATE_LIMIT_CONTACT_PER_IP_PER_MINUTE` | 3 | |
+| `RATE_LIMIT_CONTACT_GLOBAL_PER_MINUTE` | 15 | |
+
+Setting a limit to `0` disables that window. The global window is the cost guard — a per-IP limit alone is defeated by header spoofing or a botnet. Client identity comes from the **last** `X-Forwarded-For` entry, which is the one Cloud Run's front end appends and the only part a client cannot forge.
+
+Over-limit requests get **429** with a `Retry-After` header.
+
+## API
+
+| Endpoint | Notes |
+| --- | --- |
+| `GET /` · `GET /health` | Health check |
+| `GET /check-paths` | Document availability |
+| `GET /api/content/{file_name}` | Resolved and confined to the docs dir |
+| `GET /api/projects` | Listing (content stripped) |
+| `GET /api/projects/{slug}` | Single project |
+| `POST /generate-text` | Rate limited |
+| `POST /chat-with-files` | Rate limited |
+| `POST /api/contact` | Rate limited |
+
+Unexpected errors return an opaque `"Internal server error"`; details are logged server-side with a stack trace rather than reflected to the caller.
+
+### Gemini models
+
+`gemini_helper.py` tries `-latest` aliases first. Pinned model names were previously used and **all four were retired upstream**, which broke chat entirely with 404s. Fallback advances on 404/429/5xx read from the SDK's structured `APIError.code`, not substring matching.
 
 ## Deployment
 
-### Automated Deployment (GitHub Actions)
+Pushing to `main` runs `verify` (compile, import smoke check, `pip-audit`) then deploys to Cloud Run. Pull requests run `verify` only — it needs no cloud credentials.
 
-Push to main branch triggers automatic deployment to Cloud Run via GitHub Actions workflow.
+Authentication uses **Workload Identity Federation**, keyless. There is no service-account JSON key; the OIDC provider is restricted by attribute condition to this repository.
 
-Required GitHub Secrets:
-
--   `GCP_PROJECT_ID`: Google Cloud project identifier
--   `GCP_SA_KEY`: Service account key with Cloud Run access
--   `GEMINI_API_KEY`: Gemini API key for production
--   `EMAIL_ADDRESS`: Gmail address for SMTP
--   `EMAIL_PASSWORD`: Gmail App Password (16-digit code)
--   `YOUR_EMAIL`: Email address to receive contact form submissions
-
-### Manual Deployment (if needed)
+`GEMINI_API_KEY` and `EMAIL_PASSWORD` are attached from **Secret Manager** with `--set-secrets`, not `--set-env-vars` — env vars are readable in Cloud Run revision metadata by anyone with console/API read on the service.
 
 ```bash
-# Build and deploy to Cloud Run
-gcloud run deploy backend \
-  --source . \
-  --platform managed \
-  --region me-west1 \
-  --allow-unauthenticated
+# create/rotate a secret
+printf %s "$VALUE" | gcloud secrets create gemini-api-key --data-file=-
+printf %s "$VALUE" | gcloud secrets versions add gemini-api-key --data-file=-
 ```
 
-## Documentation System
+The deploy service account needs `roles/secretmanager.secretAccessor`.
 
-### Directory Structure
+### Known limitation
 
-```bash
-docs/
-├── private/    # Personal documents (gitignored)
-│   ├── resume.md
-│   └── about-me.md
-└── templates/  # Public templates
-```
+`collected_emails.json` is written to container-local disk and is therefore discarded on every scale-to-zero. Contact submissions still reach you by SMTP; that file is a best-effort local log, not a durable record.
 
-### Supported Formats
+## Contributing
 
--   Markdown (.md)
--   PDF (.pdf)
-
-## Troubleshooting
-
-### Cloud Run Issues
-
-```bash
-# View service logs
-gcloud logs tail --project YOUR_PROJECT_ID
-
-# Check service status
-gcloud run services describe backend
-
-# Verify deployment
-gcloud run services list
-```
-
-### Local Development Issues
-
-1. File Permission Errors:
-
-```bash
-chmod 755 docs
-chmod 644 docs/private/*.md
-```
-
-2. Missing Directories:
-
-```bash
-mkdir -p docs/private
-touch docs/private/.gitkeep
-```
-
-3. Environment Issues:
-
--   Verify .env files exist and are properly configured
--   Check GEMINI_API_KEY validity
--   Confirm CORS settings match frontend URLs
-
-### GitHub Actions Issues
-
--   Check Actions tab in repository for build logs
--   Verify GitHub secrets are properly set
--   Ensure service account has necessary permissions
-
-## Security Considerations
-
--   Environment variables managed via GitHub Secrets
--   CORS configuration for allowed origins
--   Private documents protected via .gitignore
--   Cloud Run security best practices
+See the root [README.md](../README.md).
