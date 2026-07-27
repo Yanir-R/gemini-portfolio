@@ -1,55 +1,73 @@
 # GitHub Actions Workflows
 
-## Frontend Deployment Configuration
+Two workflows, each split into `verify` and `deploy`.
 
-### Required GitHub Secrets
+| Workflow | Triggers on | Jobs |
+| --- | --- | --- |
+| `frontend-deploy.yml` | changes under `frontend/**` | `verify` → `deploy-pages` (Cloudflare) → `deploy` (legacy Cloud Run) |
+| `backend-deploy.yml` | changes under `backend/**` | `verify` → `deploy` (Cloud Run) |
 
-You need to configure these secrets in your GitHub repository settings (Settings > Secrets and variables > Actions):
+## Why verify and deploy are separate
 
-#### Google Cloud Configuration
+`verify` runs on **pull requests and pushes**, needs no cloud credentials, and deploys nothing:
 
--   `GCP_PROD_PROJECT_ID`: Your production project ID (e.g., "my-portfolio-prod")
--   `GCP_DEV_PROJECT_ID`: Your development project ID (e.g., "my-portfolio-dev")
--   `GCP_REGION`: Currently using "me-west1"
--   `GCP_WORKLOAD_IDENTITY_PROVIDER`: From GCP Workload Identity setup
--   `GCP_SA_EMAIL`: Your service account email from GCP
+-   frontend: `npm ci`, typecheck, lint, format check, build, `npm audit --audit-level=high`
+-   backend: `pip install`, `compileall`, import smoke check, `pip-audit`
 
-#### Application Configuration
+`deploy` is gated on `github.event_name == 'push'` and `needs: verify`. Both deploy jobs target **fixed service names with no per-PR isolation**, so running them for a pull request would overwrite the shared environment with unreviewed code, and two concurrent PRs would race for the same service.
 
--   `VITE_BACKEND_URL`:
-    -   Development: "https://backend-dev-240663900746.me-west1.run.app"
-    -   Production: "https://backend-240663900746.me-west1.run.app"
--   `PROD_DOMAIN`: https://frontend-240663900746.me-west1.run.app
--   `DEV_DOMAIN`: "localhost:3000"
+The audits run in CI, so a newly disclosed advisory fails the build rather than sitting unnoticed.
 
-### How to Set Up Secrets
+## Required configuration
 
-1. Go to your GitHub repository
-2. Navigate to Settings > Secrets and variables > Actions
-3. Click "New repository secret"
-4. Add each required secret listed above
+### Secrets
 
-### Security Features
+| Name | Value |
+| --- | --- |
+| `GCP_DEV_PROJECT_ID`, `GCP_PROD_PROJECT_ID` | Target GCP project ID |
+| `GCP_REGION` | `me-west1` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource path |
+| `GCP_SA_EMAIL` | Deploy service account address |
+| `VITE_BACKEND_URL` | Backend origin compiled into the frontend bundle |
+| `EMAIL_ADDRESS`, `YOUR_EMAIL` | SMTP sender / recipient |
+| `CLOUDFLARE_API_TOKEN` | Scope: Account → Cloudflare Pages → Edit |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account |
+| `PROD_DOMAIN`, `DEV_DOMAIN` | Custom domains, if mapped |
 
--   ✅ Workload Identity Federation (more secure than key-based auth)
--   ✅ Minimal required permissions
--   ✅ Path-based deployment triggers
--   ✅ Dependency caching
--   ✅ Environment-specific configurations
--   ✅ Separated build/deploy steps
+### Variables
 
-### Current Deployment Flow
+| Name | Value |
+| --- | --- |
+| `CLOUDFLARE_PAGES_PROJECT` | Pages project name |
+| `CLOUDFLARE_PAGES_ENABLED` | `true` arms the Pages deploy — set **last** |
+| `SITE_URL` | Public origin for canonical/OG tags |
+| `ALLOWED_ORIGINS` | Extra CORS origins passed to the backend |
 
-1. Push to `main` -> Deploys to development environment
-2. Push to `prod` -> Deploys to production environment
+Set up under **Settings → Secrets and variables → Actions**.
 
-### Troubleshooting
+## Security notes
 
-If deployment fails, check:
+-   **Keyless auth.** Workload Identity Federation, no `GCP_SA_KEY` and no service-account JSON anywhere. The OIDC provider carries an attribute condition restricting it to this repository, so the provider path alone cannot be used by another repo.
+-   **Secret Manager for credentials.** The backend deploy attaches `GEMINI_API_KEY` and `EMAIL_PASSWORD` with `--set-secrets`. They are deliberately not passed via `--set-env-vars`, which would leave them readable in Cloud Run revision metadata.
+-   **Least privilege.** The deploy service account holds `run.admin`, `cloudbuild.builds.builder`, `artifactregistry.writer`, `iam.serviceAccountUser` and `secretmanager.secretAccessor` — not `editor` or `owner`.
+-   **Deploys never run on pull requests.**
 
-1. GitHub Actions logs
-2. Secret configurations
-3. GCP service account permissions
-4. Cloud Run service status
+## Frontend deploy specifics
 
-Need help? Check the [Cloud Run documentation](https://cloud.google.com/run/docs) or [GitHub Actions documentation](https://docs.github.com/en/actions)
+Cloudflare Pages uses **Direct Upload**: GitHub Actions builds and `wrangler pages deploy` uploads `dist/`. The build step must receive `VITE_BACKEND_URL` and `VITE_SITE_URL`, because Vite inlines them at build time.
+
+This is also why `deploy-pages` rebuilds rather than reusing `verify`'s output: `verify` runs without secrets, so its bundle contains the config fallbacks rather than the real backend origin. Sharing that artifact would ship a frontend pointing at the wrong host.
+
+The legacy Cloud Run `deploy` job remains until the Pages cutover is confirmed. Its generated Dockerfile ships the already-built `dist/` — an in-image `npm run build` receives none of the workflow env and would silently drop both variables.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| `BILLING_DISABLED` / `PERMISSION_DENIED` on deploy | Billing not enabled on the GCP project — Artifact Registry and Cloud Build refuse to run without it |
+| `deploy-pages` skipped | `CLOUDFLARE_PAGES_ENABLED` is not `true` |
+| Frontend loads, API calls fail with CORS errors | Usually the backend is down — a 5xx from Cloud Run's front door carries no CORS headers. Check the backend responds before changing CORS config |
+| Frontend calls the wrong backend | `VITE_BACKEND_URL` is build-time; rebuild and redeploy after changing it |
+| Deep links 404 on Pages | `public/_redirects` missing from `dist/` |
+
+Reference: [Cloud Run](https://cloud.google.com/run/docs) · [Cloudflare Pages](https://developers.cloudflare.com/pages/) · [GitHub Actions](https://docs.github.com/en/actions)

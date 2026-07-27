@@ -1,145 +1,98 @@
 # AI Portfolio Frontend
 
-React-based frontend for the AI Portfolio application, deployed on Google Cloud Run.
+React + TypeScript single-page app, built with Vite and deployed to Cloudflare Pages.
 
-## Project Structure
+## Project structure
 
-```bash
+```
 frontend/
+├── public/
+│   └── _redirects        # SPA fallback: /* -> /index.html (deep links)
 ├── src/
-│   ├── api/          # API integration
-│   ├── components/   # React components
-│   └── pages/        # Page components
-├── .env.development  # Development environment
-├── .env.production   # Production environment
-└── vite.config.mts   # Vite configuration
+│   ├── api/              # apiClient (base URL) + endpoints (relative paths)
+│   ├── components/
+│   ├── hooks/
+│   ├── pages/
+│   ├── services/         # chatService, projectService
+│   └── types/
+├── .env.development
+├── eslint.config.js
+└── vite.config.mts
 ```
 
-## Features
+## Tech stack
 
--   Real-time chat interface
--   Markdown and code syntax highlighting
--   Loading states and error handling
--   Responsive design
--   Accessibility features
--   Interactive message quick-actions
+React 19 · TypeScript 5.9 · Vite 8 · react-router 8 · TailwindCSS 3 · Axios
 
-## Tech Stack
+> `react-router-dom` is not published for v8 — import from `react-router`. v8 also sets the Node >= 22.22.0 floor for this project.
 
--   React 18+
--   TypeScript
--   TailwindCSS
--   Axios
--   Vite
+## Prerequisites
 
-## Environment Setup
-
-1. Development environment:
-
-```bash
-# frontend/.env.development
-VITE_BACKEND_URL=http://localhost:8000
-VITE_ENV=development
-```
-
-2. Production environment:
-
-```bash
-# frontend/.env.production
-VITE_BACKEND_URL=https://backend-240663900746.me-west1.run.app
-VITE_ENV=production
-```
+-   Node.js >= 22.22.0, npm >= 10.8.2
 
 ## Development
 
 ```bash
 npm install
-npm run dev
+npm run dev     # http://localhost:3000
 ```
+
+| Script | Does |
+| --- | --- |
+| `dev` | Vite dev server, port 3000 |
+| `typecheck` | `tsc --noEmit` |
+| `lint` | ESLint (flat config) |
+| `format` / `format:check` | Prettier |
+| `build` | Typecheck, then build — the build fails on a type error |
+| `preview` | Serve the built `dist/` |
+
+## Configuration
+
+Both variables are **build-time**: Vite inlines them into the bundle, so changing one requires a rebuild, not a restart.
+
+```bash
+# frontend/.env.development
+VITE_BACKEND_URL=http://localhost:8000
+VITE_SITE_URL=http://localhost:3000
+```
+
+| Variable | Effect | Unset falls back to |
+| --- | --- | --- |
+| `VITE_BACKEND_URL` | Base URL for every API call | deployed backend origin (production) / `localhost:8000` (dev) |
+| `VITE_SITE_URL` | Canonical + OpenGraph URLs in `index.html` | deployed frontend origin |
+
+`vite.config.mts` reads these via `loadEnv`, which also picks up process env vars — that is how CI injects them. Endpoint paths in `src/api/endpoints.ts` are **relative**; `apiClient` supplies the host, so there is only one place the backend origin is defined.
+
+### Social preview image
+
+`og:image` / `twitter:image` are intentionally absent, and `twitter:card` is `summary`. Add `public/preview-image.jpg` (1200x630) and restore the tags to enable rich previews — advertising an image URL that 404s renders an empty card.
 
 ## Deployment
 
-Deployment is handled automatically by GitHub Actions when pushing to main branch.
+Pushing to `main` runs `verify` (typecheck, lint, format, build, `npm audit`) and then deploys to Cloudflare Pages via `wrangler pages deploy`. Pull requests run `verify` only.
 
-### Manual Deployment (if needed)
+The Pages project uses **Direct Upload**, not Git integration: GitHub Actions builds with the right build-time env and uploads the result. Do **not** set `VITE_*` variables in the Cloudflare dashboard — with Direct Upload, Cloudflare never builds, so anything set there is silently ignored.
 
-```bash
-npm run build
-gcloud run deploy frontend \
-  --source . \
-  --platform managed \
-  --region me-west1 \
-  --allow-unauthenticated
-```
+The deploy job is dormant until the `CLOUDFLARE_PAGES_ENABLED` repository variable is `true`.
 
-## API Integration
+### SPA routing
 
-Backend endpoints:
+`public/_redirects` sends unmatched paths to `index.html`. Without it, a hard refresh on `/projects/reelsensei` returns 404 — this replaces the `try_files` rule the old nginx container used.
 
--   Health: `${BACKEND_URL}/health`
--   Chat: `${BACKEND_URL}/chat-with-files`
--   Files: `${BACKEND_URL}/check-paths`
--   Content: `${BACKEND_URL}/api/content/${fileName}`
+## API integration
 
-## Documentation Integration
+All calls go through `apiClient` (`src/api/client.ts`), which sets `baseURL` from `VITE_BACKEND_URL`:
 
-The frontend fetches documentation from the backend service. The documentation includes:
+| Path | Used by |
+| --- | --- |
+| `/health` | — |
+| `/check-paths` | `chatService.checkFiles` |
+| `/chat-with-files` | `chatService.sendMessage` |
+| `/api/content/{file}` | About page |
+| `/api/projects`, `/api/projects/{slug}` | `projectService` |
 
--   Resume
--   About Me
--   AI chat responses
-
-Note: All documentation files are managed directly in the backend service's docs directory.
-
-## Key Components
-
-### Chat.tsx
-
-Main chat interface component:
-
--   Handles message history
--   Manages API communication
--   Implements loading states
--   Error handling
--   Interactive message boxes for quick responses
-
-### Available Props and Types
-
-```typescript
-interface ChatMessage {
-    type: 'user' | 'ai' | 'initial' | 'system';
-    content: string;
-}
-
-interface ChatRequest {
-    message: string;
-    conversation_history?: ChatMessage[];
-}
-```
+The backend rate limits the chat and contact endpoints and returns **429** with a `Retry-After` header; `chatService` surfaces the message through its existing error path.
 
 ## Contributing
 
-See main [README.md](../README.md) for contribution guidelines.
-
-## Prerequisites
-
-Before you begin, ensure you have the following installed:
-
--   Node.js (v14.0.0 or higher)
--   npm (v6.0.0 or higher)
-
-## Installation
-
-1. Clone the repository:
-
-```bash
-git clone <your-repository-url>
-cd <project-directory>
-```
-
-2. Install the dependencies:
-
-```bash
-npm install react react-dom
-npm install --save-dev typescript @types/react @types/react-dom vite axios
-```
+See the root [README.md](../README.md). CI must pass typecheck, lint, format check, build and audit.

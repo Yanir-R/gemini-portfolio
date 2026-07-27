@@ -143,6 +143,16 @@ jobs:
           echo "Starting deployment process..."
           cd ${{ env.BACKEND_DIR }}
 
+          # --set-env-vars uses gcloud's ^DELIM^ syntax (see `gcloud topic
+          # escaping`): ALLOWED_ORIGINS is itself a comma-separated list, and a
+          # comma-delimited flag would split it into bare items with no "=",
+          # failing the deploy or truncating the CORS allowlist. "|" cannot
+          # appear in a URL or email address.
+          #
+          # Both flags are kept on one line on purpose. A "\" continuation
+          # inside the quoted value preserves the next line's indentation, so
+          # every item after the first arrived with ~26 leading spaces in its
+          # key.
           gcloud run deploy backend \
             --source . \
             --platform managed \
@@ -155,11 +165,8 @@ jobs:
             --memory=512Mi \
             --timeout=300 \
             --service-account=${{ secrets.GCP_SA_EMAIL }} \
-            --set-env-vars="ENVIRONMENT=${{ env.ENVIRONMENT }},\
-                          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},\
-                          EMAIL_ADDRESS=${{ secrets.EMAIL_ADDRESS }},\
-                          EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }},\
-                          YOUR_EMAIL=${{ secrets.YOUR_EMAIL }}" \
+            --set-env-vars="^|^ENVIRONMENT=${{ env.ENVIRONMENT }}|EMAIL_ADDRESS=${{ secrets.EMAIL_ADDRESS }}|YOUR_EMAIL=${{ secrets.YOUR_EMAIL }}|ALLOWED_ORIGINS=${{ vars.ALLOWED_ORIGINS }}" \
+            --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,EMAIL_PASSWORD=email-password:latest" \
             --labels="managed-by=github-actions,commit-sha=${{ github.sha }}" \
             --quiet
 
