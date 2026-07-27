@@ -32,7 +32,7 @@ web-app
 production
 
 ## Demo URL
-https://frontend-240663900746.me-west1.run.app
+https://yanir-portfolio.pages.dev
 
 ## Repository
 https://github.com/yourusername/gemini-portfolio
