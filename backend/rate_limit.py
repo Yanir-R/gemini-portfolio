@@ -9,11 +9,19 @@ tier, spend real money). Two windows are enforced:
   distinct source addresses are used. This is the cost guard: it still holds
   when the per-client key is spoofed or when traffic is spread across a botnet.
 
-State is per-process and in-memory. On Cloud Run each instance keeps its own
-counters, so the effective global ceiling is GLOBAL_PER_MINUTE x max-instances
-(currently 4). That is intentional - a shared store would mean adding Redis for
-a portfolio site - but it is why the global default is set well below the
-upstream free-tier quota rather than at it.
+State is per-process and in-memory, so the effective global ceiling is
+
+    GLOBAL_PER_MINUTE x processes-per-instance x max-instances
+
+Both deployment paths run a single process per instance (the workflow's
+generated Dockerfile and backend/Dockerfile both use plain uvicorn), and Cloud
+Run is capped at 4 instances, so the real ceiling is GLOBAL_PER_MINUTE x 4.
+Switching to gunicorn with multiple workers would multiply it again - see the
+note in backend/Dockerfile.
+
+Keeping the state in-process is intentional: a shared counter would mean running
+Redis for a portfolio site. It is also why the global default sits well below
+the upstream free-tier quota rather than at it.
 """
 
 import logging
@@ -56,6 +64,9 @@ class SlidingWindowLimiter:
         self._keys: Dict[str, Deque[float]] = {}
         self._global: Deque[float] = deque()
         self._lock = threading.Lock()
+        # Saturation persists across many requests, so the warning is throttled
+        # to once per window rather than emitted per request.
+        self._last_saturation_log = 0.0
 
     @staticmethod
     def _prune(window: Deque[float], now: float) -> None:
@@ -83,16 +94,34 @@ class SlidingWindowLimiter:
 
             if self.per_key_limit:
                 window = self._keys.get(key)
+
                 if window is None:
                     if len(self._keys) >= MAX_TRACKED_KEYS:
                         self._sweep_idle_keys(now)
-                    window = self._keys.setdefault(key, deque())
 
-                self._prune(window, now)
-                if len(window) >= self.per_key_limit:
-                    retry_after = int(WINDOW_SECONDS - (now - window[0])) + 1
-                    return False, max(1, retry_after)
-                window.append(now)
+                    if len(self._keys) >= MAX_TRACKED_KEYS:
+                        # The sweep freed nothing, so every tracked key is still
+                        # active. Track no further keys rather than growing the
+                        # map without bound; the global window below is what
+                        # actually caps cost, and it still applies. Rejecting
+                        # instead would let a key-spraying client deny service to
+                        # every new legitimate visitor.
+                        if now - self._last_saturation_log >= WINDOW_SECONDS:
+                            self._last_saturation_log = now
+                            logger.warning(
+                                "Client key table saturated at %d entries; "
+                                "falling back to global-only limiting",
+                                MAX_TRACKED_KEYS,
+                            )
+                    else:
+                        window = self._keys.setdefault(key, deque())
+
+                if window is not None:
+                    self._prune(window, now)
+                    if len(window) >= self.per_key_limit:
+                        retry_after = int(WINDOW_SECONDS - (now - window[0])) + 1
+                        return False, max(1, retry_after)
+                    window.append(now)
 
             if self.global_limit:
                 self._global.append(now)
