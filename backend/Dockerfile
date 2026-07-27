@@ -17,5 +17,10 @@ COPY . .
 # Expose port 8080
 EXPOSE 8080
 
-# Run with gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers=4", "--worker-class", "uvicorn.workers.UvicornWorker", "main:app"]
+# Single process, matching what the deploy workflow's generated Dockerfile runs.
+#
+# Do not raise this to multiple workers without revisiting rate_limit.py: its
+# counters are per-process, so N workers multiply the global ceiling by N and
+# weaken the cost guard on the Gemini and email endpoints. The app is I/O bound,
+# so one uvicorn process handles this workload's concurrency on its own.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -7,6 +7,7 @@ from docs_helper import (
     load_all_files, read_markdown_file, DOCS_DIR, PRIVATE_DIR,
     get_all_projects, get_project_by_slug, get_featured_projects, load_projects_content
 )
+from rate_limit import chat_limiter, contact_limiter, enforce_rate_limit
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 import os
@@ -135,11 +136,13 @@ async def check_paths():
     }
 
 @app.post("/generate-text")
-async def chat(chat_request: ChatRequest):
+async def chat(chat_request: ChatRequest, request: Request):
     try:
+        enforce_rate_limit(request, chat_limiter, "generate-text")
+
         if not GEMINI_API_KEY:
             raise HTTPException(status_code=500, detail="GEMINI_API_KEY not found in environment variables")
-            
+
         response = get_gemini_response(GEMINI_API_KEY, chat_request.message)
         return {"response": response}
     except HTTPException:
@@ -149,9 +152,11 @@ async def chat(chat_request: ChatRequest):
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 @app.post("/chat-with-files")
-async def chat_with_files(chat_request: ChatRequest):
+async def chat_with_files(chat_request: ChatRequest, request: Request):
     logger.info(f"Received chat request: {chat_request}")
     try:
+        enforce_rate_limit(request, chat_limiter, "chat-with-files")
+
         if not GEMINI_API_KEY:
             raise HTTPException(
                 status_code=500, 
@@ -301,8 +306,14 @@ async def get_content(file_name: str):
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
 @app.post("/api/contact")
-async def contact(request: ContactRequest):
+async def contact(request: ContactRequest, http_request: Request = None):
     try:
+        # Only rate limited when reached over HTTP. chat_with_files calls this
+        # directly (http_request is None) and is already limited upstream, so
+        # the internal path must not consume a second slot.
+        if http_request is not None:
+            enforce_rate_limit(http_request, contact_limiter, "contact")
+
         # Email configuration
         sender_email = os.getenv("EMAIL_ADDRESS")
         sender_password = os.getenv("EMAIL_PASSWORD")
