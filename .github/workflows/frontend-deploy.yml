@@ -62,12 +62,10 @@ jobs:
         run: npm audit --audit-level=high
 
   # Cloudflare Pages deploy. The frontend is a static bundle, so it belongs on a
-  # CDN rather than in an nginx container on Cloud Run.
+  # CDN rather than in a container.
   #
-  # Dormant until the repository variable CLOUDFLARE_PAGES_ENABLED is set to
-  # "true", so this cannot fail pushes while the Cloudflare project and secrets
-  # are still being set up. Once Pages serves the domain, the `deploy` job below
-  # (and frontend/Dockerfile + nginx.conf) can be deleted.
+  # Gated on the repository variable CLOUDFLARE_PAGES_ENABLED so the job can be
+  # switched off without editing the workflow.
   deploy-pages:
     if: github.event_name == 'push' && vars.CLOUDFLARE_PAGES_ENABLED == 'true'
     needs: verify
