@@ -11,24 +11,36 @@
             content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
         />
 
+        <!-- The site-URL placeholder below is substituted at build time from the
+             VITE_SITE_URL env var, defaulting to the deployed origin. Set that
+             variable to the real domain rather than hardcoding a host here. -->
+        <link rel="canonical" href="%VITE_SITE_URL%/" />
+
         <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://yanir.dev/" />
+        <meta property="og:url" content="%VITE_SITE_URL%/" />
         <meta property="og:title" content="Yanir.dev" />
         <meta
             property="og:description"
             content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
         />
-        <meta property="og:image" content="https://yanir.dev/preview-image.jpg" />
-        <!-- TODO: Add a preview image -->
+        <!-- og:image / twitter:image are intentionally absent: there is no
+             preview asset yet, and advertising a URL that 404s renders an empty
+             card on most platforms. twitter:card is "summary" for the same
+             reason - "summary_large_image" reserves a large image area that
+             would stay blank.
 
-        <meta property="twitter:card" content="summary_large_image" />
-        <meta property="twitter:url" content="https://yanir.dev/" />
+             To enable: add frontend/public/preview-image.jpg (1200x630), then
+             re-add og:image and twitter:image pointing at the site-URL
+             placeholder plus /preview-image.jpg, and switch the card type back
+             to summary_large_image. -->
+
+        <meta property="twitter:card" content="summary" />
+        <meta property="twitter:url" content="%VITE_SITE_URL%/" />
         <meta property="twitter:title" content="Yanir.dev" />
         <meta
             property="twitter:description"
             content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
         />
-        <meta property="twitter:image" content="https://yanir.dev/preview-image.jpg" />
     </head>
     <body>
         <div id="root"></div>
