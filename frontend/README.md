@@ -56,10 +56,18 @@ VITE_BACKEND_URL=http://localhost:8000
 VITE_SITE_URL=http://localhost:3000
 ```
 
-| Variable | Effect | Unset falls back to |
+| Variable | Effect | If unset |
 | --- | --- | --- |
-| `VITE_BACKEND_URL` | Base URL for every API call | deployed backend origin (production) / `localhost:8000` (dev) |
-| `VITE_SITE_URL` | Canonical + OpenGraph URLs in `index.html` | deployed frontend origin |
+| `VITE_BACKEND_URL` | Base URL for every API call | dev: `localhost:8000` · **production build fails** |
+| `VITE_SITE_URL` | Canonical + OpenGraph URLs in `index.html` | dev: `localhost:3000` · **production build fails** |
+
+There is deliberately **no production fallback**. A pinned default used to be the only reason production resolved correctly, which is exactly what hid the fact that CI's injected values were being discarded. A production build now stops with the missing variable named:
+
+```
+Error: Production build is missing VITE_BACKEND_URL and VITE_SITE_URL.
+```
+
+`VITE_ALLOW_UNCONFIGURED_BUILD=true` opts out and substitutes the localhost values. CI `verify` sets it to compile without secrets; its artifact is never deployed. Do not set it on a build you intend to ship.
 
 `vite.config.mts` reads these via `loadEnv`, which also picks up process env vars — that is how CI injects them. Endpoint paths in `src/api/endpoints.ts` are **relative**; `apiClient` supplies the host, so there is only one place the backend origin is defined.
 

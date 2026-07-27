@@ -66,7 +66,9 @@ VITE_BACKEND_URL=http://localhost:8000
 VITE_SITE_URL=http://localhost:3000
 ```
 
-`VITE_SITE_URL` fills the canonical and OpenGraph URLs in `index.html`. Unset, it falls back to the deployed origin — never hardcode a domain in the markup.
+`VITE_SITE_URL` fills the canonical and OpenGraph URLs in `index.html`. A **production build fails** if it or `VITE_BACKEND_URL` is missing — a pinned default was previously the only reason production resolved correctly, which hid the injected values being dropped. Never hardcode a domain in the markup.
+
+`VITE_ALLOW_UNCONFIGURED_BUILD=true` opts out and substitutes localhost placeholders. CI `verify` uses it to compile without secrets; never set it on a build you intend to deploy.
 
 ### Backend
 

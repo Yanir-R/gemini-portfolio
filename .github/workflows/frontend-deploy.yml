@@ -96,7 +96,9 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         env:
           VITE_BACKEND_URL: ${{ secrets.VITE_BACKEND_URL }}
-          # Unset falls back to the deployed origin in vite.config.mts.
+          # Required: a production build fails if this or VITE_BACKEND_URL is
+          # empty, so an unset SITE_URL variable breaks the deploy rather than
+          # silently shipping a wrong canonical URL.
           VITE_SITE_URL: ${{ vars.SITE_URL }}
         run: npm run build
 
