@@ -5,24 +5,28 @@ import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Fallbacks used when no .env file supplies VITE_BACKEND_URL for the mode.
+// Fallbacks for when no .env file or process env supplies the value.
+//
+// The production entries are intentionally empty rather than a pinned host: CI
+// injects VITE_BACKEND_URL and VITE_SITE_URL, and a hardcoded default here was
+// previously the only reason production worked at all, which masked the fact
+// that the injected values were being dropped. An empty default makes a missing
+// variable fail visibly instead of silently shipping a stale host.
 const DEFAULT_BACKEND_URL = {
-    production: 'https://backend-240663900746.me-west1.run.app',
+    production: '',
     development: 'http://localhost:8000',
 } as const;
 
-// Public origin used for canonical/OpenGraph URLs. Defaults to the Cloud Run
-// frontend rather than a custom domain: social cards must not point at a host
-// this project does not control. Override with VITE_SITE_URL once the real
-// domain is confirmed.
+// Public origin for canonical/OpenGraph URLs. Never hardcode a domain here -
+// social cards must not point at a host this project does not control.
 const DEFAULT_SITE_URL = {
-    production: 'https://frontend-240663900746.me-west1.run.app',
+    production: '',
     development: 'http://localhost:3000',
 } as const;
 
-export default defineConfig(({ mode }) => {
-    // Respect .env / .env.[mode] files, falling back to the defaults above so a
-    // production build still points at Cloud Run without a committed .env.production.
+export default defineConfig(({ mode, command }) => {
+    // loadEnv reads .env files and also picks up prefixed process env vars,
+    // which is how CI injects these.
     const env = loadEnv(mode, __dirname, 'VITE_');
     const isProd = mode === 'production';
     const backendUrl =
@@ -31,6 +35,28 @@ export default defineConfig(({ mode }) => {
     const siteUrl = (
         env.VITE_SITE_URL || (isProd ? DEFAULT_SITE_URL.production : DEFAULT_SITE_URL.development)
     ).replace(/\/$/, '');
+
+    // Fail the build rather than emit a bundle wired to nothing. `verify` builds
+    // without secrets, so this is scoped to real builds only via `command`.
+    if (command === 'build' && isProd) {
+        const missing = [!backendUrl && 'VITE_BACKEND_URL', !siteUrl && 'VITE_SITE_URL'].filter(
+            Boolean
+        );
+        if (missing.length && process.env.VITE_ALLOW_UNCONFIGURED_BUILD !== 'true') {
+            throw new Error(
+                `Production build is missing ${missing.join(' and ')}. ` +
+                    'Set them in the environment, or set VITE_ALLOW_UNCONFIGURED_BUILD=true ' +
+                    'for a config-less build such as CI verification.'
+            );
+        }
+    }
+
+    // An empty siteUrl would render the canonical tag as href="/", which Vite
+    // resolves as an asset and fails on with EISDIR. Substitute the localhost
+    // values so a deliberately unconfigured build still produces valid output;
+    // the guard above is what stops those placeholders reaching a deployment.
+    const resolvedBackendUrl = backendUrl || DEFAULT_BACKEND_URL.development;
+    const resolvedSiteUrl = siteUrl || DEFAULT_SITE_URL.development;
 
     return {
         plugins: [
@@ -43,7 +69,7 @@ export default defineConfig(({ mode }) => {
                 name: 'inject-site-url',
                 transformIndexHtml: {
                     order: 'pre' as const,
-                    handler: (html: string) => html.replaceAll('%VITE_SITE_URL%', siteUrl),
+                    handler: (html: string) => html.replaceAll('%VITE_SITE_URL%', resolvedSiteUrl),
                 },
             },
         ],
@@ -66,7 +92,7 @@ export default defineConfig(({ mode }) => {
         },
         envPrefix: 'VITE_',
         define: {
-            'import.meta.env.VITE_BACKEND_URL': JSON.stringify(backendUrl),
+            'import.meta.env.VITE_BACKEND_URL': JSON.stringify(resolvedBackendUrl),
         },
     };
 });

@@ -43,7 +43,7 @@ def validate_email_config():
 if not validate_email_config():
     logger.warning("Email configuration is incomplete. Email functionality will not work!")
 
-FRONTEND_PROD_URL = getenv("FRONTEND_PROD_URL", "https://frontend-240663900746.me-west1.run.app")
+FRONTEND_PROD_URL = getenv("FRONTEND_PROD_URL", "")
 FRONTEND_DEV_URL = getenv("FRONTEND_DEV_URL", "http://localhost:3000")
 FRONTEND_VITE_URL = getenv("FRONTEND_VITE_URL", "http://127.0.0.1:3000")
 BACKEND_URL = getenv("BACKEND_URL", "http://127.0.0.1:8000")
