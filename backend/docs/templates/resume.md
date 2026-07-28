@@ -58,8 +58,12 @@
 
 ## Documentation Rules
 
-1. Store private resume in `/docs/private/`
-2. Use this template from `/docs/templates/` as a base
+1. Store your resume in `/docs/profile/`. **It is published**: that directory is
+   tracked in this public repository and served over `/api/content/`. Leave out
+   your phone number, address, and anything else you would not put on the site.
+2. Use this template from `/docs/templates/` as a base. Templates are never sent
+   to the chat model — if `/docs/profile/` is empty the chat says so rather than
+   answering from these placeholders.
 3. Follow the project's tech stack format from README.md
 4. Include relevant experience with:
     - React/TypeScript (Frontend)

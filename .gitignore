@@ -9,3 +9,9 @@ Thumbs.db
 # Local env files (per-service .gitignore files cover their own)
 .env
 .env.local
+
+# Agent tooling. settings.local.json accumulates approved shell commands
+# verbatim, so it records local paths and whatever was run against directories
+# outside this repo. It was previously covered only by a machine-level global
+# gitignore, which does not travel with a clone, a fork, or a second machine.
+.claude/settings.local.json

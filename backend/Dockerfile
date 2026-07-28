@@ -7,10 +7,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Create docs structure
-RUN mkdir -p /app/docs/private /app/docs/templates
-
-# Copy application files including docs
+# Copy application files including docs. The COPY creates the tree, so there is
+# no mkdir step to keep in sync with the directory names.
 COPY docs/ /app/docs/
 COPY . .
 

@@ -1,14 +1,32 @@
+"""File access for the documents the site publishes.
+
+Reading and parsing only. What the chat is allowed to know, and how that corpus
+is assembled and cached, is context.py's job.
+"""
+
 from pypdf import PdfReader
+import logging
 import os
 import re
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # Get the absolute path of the current file's directory
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)) 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOCS_DIR = os.path.join(BASE_DIR, "docs")
-PRIVATE_DIR = os.path.join(DOCS_DIR, "private")
+
+# Yanir's own documents. Named for what it is: this repository is public and
+# these files are served over /api/content/, so everything in here is published.
+# It was called "private/", which claimed an access boundary that has never
+# existed and invited exactly the mistake of putting something sensitive in it.
+PROFILE_DIR = os.path.join(DOCS_DIR, "profile")
+
+# Placeholder documents for anyone forking this repo. Never loaded into the
+# chat's context - see the note in context.py about why an empty corpus fails
+# loudly instead of falling back to these.
 TEMPLATES_DIR = os.path.join(DOCS_DIR, "templates")
+
 PROJECTS_DIR = os.path.join(DOCS_DIR, "projects")
 STATIC_DIR = os.path.join(BASE_DIR, "static", "projects")
 
@@ -18,8 +36,8 @@ def read_markdown_file(file_path: str) -> str:
         with open(file_path, 'r', encoding='utf-8') as file:
             content = file.read()
             return content
-    except Exception as e:
-        print(f"Error reading file {file_path}: {str(e)}")
+    except Exception:
+        logger.exception("Error reading file %s", file_path)
         return ""
 
 def read_pdf_file(file_path: str) -> str:
@@ -27,34 +45,9 @@ def read_pdf_file(file_path: str) -> str:
     try:
         with open(file_path, 'rb') as file:
             return "\n".join(page.extract_text() for page in PdfReader(file).pages)
-    except Exception as e:
-        print(f"Error reading PDF file: {e}")
+    except Exception:
+        logger.exception("Error reading PDF file %s", file_path)
         return ""
-
-def read_directory(directory: str, doc_type: str) -> list[str]:
-    """Read all files from a directory"""
-    contents = []
-    if os.path.exists(directory):
-        for filename in os.listdir(directory):
-            if not filename.endswith(('.pdf', '.md')):
-                continue
-            
-            file_path = os.path.join(directory, filename)
-            content = read_pdf_file(file_path) if filename.endswith('.pdf') else read_markdown_file(file_path)
-            
-            if content:
-                contents.append(f"{doc_type} Document: {filename}\n---\n{content}\n---")
-    return contents
-
-def load_all_files() -> str:
-    """Load and combine content from all PDFs and MD files"""
-    # Try private files first, fall back to templates if none found
-    all_content = read_directory(PRIVATE_DIR, "Private")
-
-    if not all_content:
-        all_content = read_directory(TEMPLATES_DIR, "Template")
-
-    return "\n\n".join(all_content)
 
 def parse_project_metadata(content: str) -> Dict[str, Any]:
     """Parse project metadata from markdown content"""
@@ -189,13 +182,3 @@ def get_project_by_slug(slug: str) -> Optional[Dict[str, Any]]:
 def get_featured_projects() -> List[Dict[str, Any]]:
     """Get only featured projects"""
     return [p for p in get_all_projects() if p.get('featured', False)]
-
-def load_projects_content() -> str:
-    """Load all project content for AI context"""
-    projects = get_all_projects()
-    content_parts = []
-    
-    for project in projects:
-        content_parts.append(f"Project: {project.get('title', 'Untitled')}\n---\n{project.get('content', '')}\n---")
-    
-    return "\n\n".join(content_parts) 

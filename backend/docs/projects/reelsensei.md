@@ -1,8 +1,18 @@
 # ReelSensei - AI Gaming Highlights
 
-🎮 **AI-Powered Gaming Video Highlight Generation**
+**Status: paused. Not publicly available.** The repository is private, the service is not
+running, and I have not decided whether to take it further. It is here because the engineering
+is worth reading about, not because it is a product you can sign up for.
 
-ReelSensei automatically transforms gaming videos records into epic highlight reels using advanced AI technology. Built with clean separation between frontend and backend services for optimal performance and scalability.
+ReelSensei turns long gaming recordings into highlight reels: a multimodal model scores moments,
+and an asynchronous pipeline does the cutting. What made it interesting was never the model - it
+was getting video processing to run at a cost that made sense, on Spot VMs and batch jobs, without
+a queue that could quietly lose work.
+
+The write-up below describes the system as it was built and last ran.
+
+## Overview
+Paused and private: the service is not running and the repository is closed. It turned long gaming recordings into highlight reels - a multimodal model scored the moments, an asynchronous pipeline did the cutting. The hard part was cost, not detection: running video processing on Spot VMs and batch jobs cheaply enough to be worth it, without a queue that could silently drop work.
 
 ## ✨ Features
 
@@ -185,20 +195,14 @@ ReelSensei automatically transforms gaming videos records into epic highlight re
 
 ---
 
-**Built with ❤️ for the gaming community**
-
-*Transform your gaming moments into epic highlights with ReelSensei* 🎮✨
-
-This project uses a fully asynchronous, cloud-native architecture for all video processing. The workflow is orchestrated through Google Cloud Tasks and GCP Batch to ensure scalability and cost-efficiency.
+All video processing is fully asynchronous, orchestrated through Google Cloud Tasks and GCP Batch
+so that a long job never blocks a request and a failed worker never loses one.
 
 ## Project Type
 web-app
 
 ## Status
-production
-
-## Demo URL
-https://reelsensei.com
+paused
 
 ## Repository
 Private Repository

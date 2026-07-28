@@ -1,244 +1,120 @@
+"""The Gemini call: model selection, generation config, and failure mapping.
+
+Prompt content lives in prompt.py and corpus assembly in context.py. What
+remains here is the part that talks to the API and decides what to do when it
+refuses.
+
+The fallback chain and its status-code handling are unchanged from the fix that
+established them: a chain that retried only on 503 never fell back at all,
+because retired models answer 404. It reads the SDK's structured status code
+rather than substring-matching the message.
+"""
+
 from google import genai
 from google.genai import errors as genai_errors
-from typing import Optional, List, Dict
+from google.genai import types
+from typing import Dict, Iterable, Optional
 import logging
-import re
+
+from context import Knowledge
+from prompt import NO_KNOWLEDGE_MESSAGE, build_contents, build_system_instruction
 
 logger = logging.getLogger(__name__)
+
+# Fallback models in order of preference. The "-latest" aliases track the
+# current generation, so a model retirement upstream does not break chat the way
+# the pinned gemini-1.5-* names did; the pinned entry in the middle is the
+# escape hatch if an alias itself starts misbehaving.
+MODELS = (
+    "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-flash-lite-latest",
+)
 
 # Status codes that mean "this model is not usable for us right now", so the next
 # candidate is worth trying: retired/unknown model, exhausted quota, or a
 # transient server-side failure.
 RETRYABLE_STATUS_CODES = frozenset({404, 429, 500, 502, 503, 504})
 
+# Low but not zero: answers should be stable and factual across reloads, while
+# still reading as conversation rather than a canned response.
+TEMPERATURE = 0.3
+
+# A hard stop on cost per request. It is NOT a length control, and sizing it as
+# one truncates answers: on Gemini 3.x this budget is shared with the model's
+# internal thinking tokens, which are spent first. Measured at a 400 budget,
+# gemini-flash-latest spent 382 tokens thinking and had 14 left for the answer,
+# so visitors got "I'm currently a Full Stack Developer at Moonsite, where" and
+# nothing else - a complete-looking success with finish_reason=MAX_TOKENS.
+#
+# Answer length is the prompt's job ("two to four sentences"). This number only
+# needs enough headroom that thinking plus a normal answer fits; observed usage
+# is ~600 thinking + ~110 answer.
+MAX_OUTPUT_TOKENS = 1_500
+
 # User-facing copy per failure category, so an auth or configuration problem is
 # not reported to visitors as if the service were merely busy.
+#
+# These render as ordinary chat bubbles, so they are written in the same first
+# person as every other answer. Naming the plumbing ("the AI service is over its
+# quota") breaks that voice and tells a visitor nothing they can act on - the
+# thing they can act on is whether to wait or to leave an email.
 BUSY_MESSAGE = (
-    "I'm sorry, the AI service is busy or over its quota right now. "
-    "Please try again in a few moments."
+    "I'm getting more questions than I can keep up with at the moment. "
+    "Give it a minute and ask me again - or leave your email here and "
+    "I'll come back to you directly."
 )
 MISCONFIGURED_MESSAGE = (
-    "I'm sorry, the AI service is not configured correctly at the moment. "
-    "Please try again later."
+    "Something on my end isn't working right now, so I can't answer properly. "
+    "Leave your email here and I'll get back to you directly."
 )
 GENERIC_ERROR_MESSAGE = (
-    "I'm sorry, I couldn't process your request just now. Please try again."
+    "That didn't go through on my end. Mind trying again?"
+)
+EMPTY_RESPONSE_MESSAGE = (
+    "I didn't manage to put an answer together for that one. "
+    "Could you try rephrasing it?"
 )
 
-def validate_email(email: str) -> tuple[bool, str]:
-    """
-    Validates email format and returns (is_valid, error_message)
-    """
-    # Basic format check
-    basic_pattern = r'^[\w\.-]+@[\w\.-]+\.\w{2,}$'
-    if not re.match(basic_pattern, email):
-        return False, "Please provide a complete email address (e.g., nice-try@example.com)"
-    
-    # Common typos and invalid formats
-    invalid_cases = {
-        '@gmail': ('@gmail.com', 'Did you mean to type @gmail.com?'),
-        '@yahoo': ('@yahoo.com', 'Did you mean to type @yahoo.com?'),
-        '@hotmail': ('@hotmail.com', 'Did you mean to type @hotmail.com?'),
-        'gmail.': ('gmail.com', 'Did you mean gmail.com?'),
-        'yahoo.': ('yahoo.com', 'Did you mean yahoo.com?'),
-        'hotmail.': ('hotmail.com', 'Did you mean hotmail.com?'),
-        '@.com': ('', 'Please include your username before @'),
-        '@': ('', 'Please provide a complete email address'),
-    }
-    
-    for invalid, (correction, message) in invalid_cases.items():
-        if invalid in email.lower() and not email.lower().endswith(correction):
-            return False, message
-            
-    return True, ""
 
 def get_gemini_response(
-    api_key: str, 
-    user_question: str, 
-    pdf_content: Optional[str] = None, 
-    conversation_history: Optional[List[Dict[str, str]]] = None
-):
-    # Fallback models in order of preference. The "-latest" aliases track the
-    # current generation, so a model retirement upstream does not break chat the
-    # way the pinned gemini-1.5-* names did.
-    MODELS = [
-        "gemini-flash-latest",
-        "gemini-3.5-flash",
-        "gemini-flash-lite-latest",
-    ]
-    
+    api_key: str,
+    user_question: str,
+    knowledge: Knowledge,
+    conversation_history: Optional[Iterable[Dict[str, str]]] = None,
+) -> str:
+    """Answers a visitor's question in Yanir's voice, grounded in `knowledge`.
+
+    Returns user-facing text in every case, including failure - callers render
+    the string as the assistant's reply rather than distinguishing error paths.
+    """
+    if knowledge.is_empty:
+        # Nothing to ground an answer in. Calling the model here would produce
+        # confident invention about a real person, which is worse than an outage.
+        logger.error("Refusing to answer: knowledge corpus is empty")
+        return NO_KNOWLEDGE_MESSAGE
+
     client = genai.Client(api_key=api_key)
-    
-    # context analysis
-    def analyze_conversation_context(history: List[Dict[str, str]], current_msg: str) -> dict:
-            context = {
-                'is_email_context': False,
-                'has_valid_email': False,
-                'provided_email': None,
-                'conversation_stage': 'general',
-                'previous_response': None,
-                'email_error': None,
-                'email_collected': False
-            }
-            
-            #  email pattern
-            email_pattern = r'[\w\.-]+@[\w\.-]+\.\w{2,}'
-            
-            # Check if email was already collected in history
-            context['email_collected'] = any(
-                msg.get('email_collected', False) 
-                for msg in history
-            )
-            
-            # Extract email from current message if present
-            email_match = re.search(email_pattern, current_msg)
-            if email_match:
-                email = email_match.group(0)
-                is_valid, error_msg = validate_email(email)
-                if is_valid:
-                    context['has_valid_email'] = True
-                    context['provided_email'] = email
-                else:
-                    context['email_error'] = error_msg
-            
-            # Simple logic for quick message follow-up
-            if history and len(history) >= 1:
-                last_msg = history[-1]
-                if last_msg.get('is_quick_message') and not context['email_collected']:
-                    context['conversation_stage'] = 'ask_email_friendly'
-                elif context['has_valid_email']:
-                    context['conversation_stage'] = 'email_provided'
-            
-            return context
+    config = types.GenerateContentConfig(
+        system_instruction=build_system_instruction(knowledge),
+        temperature=TEMPERATURE,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
+    )
+    contents = build_contents(user_question, conversation_history)
 
-        # Build conversation history text
-    history_text = ""
-    if conversation_history:
-        history_text = "Previous conversation:\n"
-        for msg in conversation_history[-4:]:
-            role = "User" if msg["role"] == "user" else "Assistant"
-            history_text += f"{role}: {msg['content']}\n"
-        history_text += "\n"
-
-    # Analyze context
-    context = analyze_conversation_context(conversation_history or [], user_question)
-    
-    # Define response templates
-    RESPONSE_TEMPLATES = {
-            'ask_email_friendly': """
-            Create a friendly, single follow-up response that:
-            1. Thanks them for their interest
-            2. Politely asks if they'd like to share their email
-            3. Makes it clear it's optional
-            4. Maintains a warm, conversational tone
-            
-            Keep it brief and natural.""",
-            
-            'dismissive': """
-            Handle a dismissive response from the user.
-            Current message: {user_question}
-            
-            Create a brief, respectful response that:
-            1. Acknowledges their preference
-            2. Keeps it short and professional
-            3. Leaves the door open for future questions
-            4. Maintains a helpful but not pushy tone
-            
-            Keep it very concise.""",
-            
-            'thanks': """
-            Handle a thank you message from the user.
-            Current message: {user_question}
-            Previous context: {history_text}
-            
-            Create a brief, friendly response that:
-            1. Acknowledges their thanks
-            2. Encourages further questions about my experience/skills
-            3. Keeps the tone warm but professional
-            4. Doesn't repeat previous responses
-            
-            Keep it natural and concise."""
-    }
-
-    # Try each model until one works
     last_error: Optional[Exception] = None
     for model_id in MODELS:
         try:
-            # Generate appropriate prompt based on context
-            if context['conversation_stage'] in RESPONSE_TEMPLATES:
-                prompt = RESPONSE_TEMPLATES[context['conversation_stage']].format(
-                    user_question=user_question,
-                    history_text=history_text
-                )
-            elif context['conversation_stage'] == 'invalid_email':
-                prompt = f"""The user provided an invalid email: {context['email_error']}.
-            Create a helpful response that:
-            1. Acknowledges their attempt
-            2. Explains the specific issue clearly
-            3. Provides the correct format example
-            4. Maintains a helpful tone
-            5. Indicates they can continue chatting about other topics
-            
-                Keep it concise and friendly."""
-                
-            elif context['conversation_stage'] == 'email_provided':
-                # Extract username from email
-                email = context['provided_email']
-                username = email.split('@')[0] if '@' in email else 'there'
-                
-                # Check if this was a direct email input
-                is_direct_email = any(
-                    msg['content'].strip() == email.strip() 
-                    for msg in conversation_history[-2:] 
-                    if msg['role'] == 'user'
-                )
-                
-                if is_direct_email:
-                    prompt = f"""Email received: {context['provided_email']}
-                    Create a brief, direct confirmation response that:
-                    1. Simply confirms receipt
-                    2. Keeps it minimal since we'll show the system message after
-                    
-                    Keep it very short and simple."""
-                else:
-                    prompt = f"""Email received: {context['provided_email']}
-                    Create a friendly response that:
-                    1. Confirms receipt warmly
-                    2. Shows appreciation
-                    3. Encourages further questions
-                    4. Maintains a casual tone
-                    
-                    Keep it natural and engaging."""
-                
-            elif pdf_content:
-                prompt = f"""Previous: {history_text}
-                Content: {pdf_content}
-                Question: {user_question}
-            
-            Create a brief response that:
-            1. Answers directly
-            2. Stays conversational
-            3. Encourages follow-up
-            
-                Keep it concise and natural."""
-            else:
-                prompt = f"""Previous: {history_text}
-                Question: {user_question}
-                
-                Create a brief response that:
-                1. Acknowledges limitations
-                2. Stays helpful
-                3. Keeps conversation going
-                
-                Be concise and friendly."""
-
             response = client.models.generate_content(
                 model=model_id,
-                contents=prompt
+                contents=contents,
+                config=config,
             )
+            _log_usage(model_id, response)
 
-            return response.text if response.text else "I apologize, but I couldn't generate a response. Please try rephrasing your question."
-        
+            text = (response.text or "").strip()
+            return text if text else EMPTY_RESPONSE_MESSAGE
+
         except Exception as e:
             last_error = e
             logger.exception("Gemini API error with model %s", model_id)
@@ -260,6 +136,39 @@ def get_gemini_response(
 
     # Every candidate model failed; report the category of the last failure.
     return _failure_message(last_error)
+
+
+def _log_usage(model_id: str, response) -> None:
+    """Records what the request actually cost, and whether it was cut short.
+
+    Nothing measured how many tokens a chat message consumed, which is why the
+    question of whether the corpus needs trimming has only ever been answered by
+    guesswork. These numbers are the input to that decision.
+
+    The truncation warning exists because truncation is otherwise invisible: the
+    call succeeds, `response.text` is a plausible string, and only
+    `finish_reason` says the visitor got half a sentence.
+    """
+    usage = getattr(response, "usage_metadata", None)
+    if usage is not None:
+        logger.info(
+            "Gemini usage model=%s prompt=%s thinking=%s output=%s total=%s",
+            model_id,
+            getattr(usage, "prompt_token_count", None),
+            getattr(usage, "thoughts_token_count", None),
+            getattr(usage, "candidates_token_count", None),
+            getattr(usage, "total_token_count", None),
+        )
+
+    candidates = getattr(response, "candidates", None) or []
+    finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
+    if finish_reason is not None and getattr(finish_reason, "name", "") == "MAX_TOKENS":
+        logger.warning(
+            "Model %s hit MAX_TOKENS - the answer was truncated mid-sentence. "
+            "Thinking tokens share MAX_OUTPUT_TOKENS (%d); raise it.",
+            model_id,
+            MAX_OUTPUT_TOKENS,
+        )
 
 
 def _failure_message(error: Optional[Exception]) -> str:

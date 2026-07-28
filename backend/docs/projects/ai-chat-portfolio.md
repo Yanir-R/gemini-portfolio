@@ -1,11 +1,11 @@
 # AI Chat Portfolio
 
 ## Overview
-A full-stack AI-powered portfolio website that allows visitors to interact with an AI assistant trained on my personal and professional information. Built with modern web technologies and deployed on Google Cloud Run.
+This site. Visitors ask questions and an assistant answers in my voice, grounded in a handful of markdown documents - it is not trained on anything, it is given those documents and told not to go beyond them. The interesting part is the refusal: when the documents do not cover a question it says so rather than inventing an employer or a date.
 
 ## Technical Details
-- **Frontend**: React 18, TypeScript, Vite, TailwindCSS
-- **Backend**: FastAPI, Python 3.8+, Google Gemini AI
+- **Frontend**: React 19, TypeScript, Vite, TailwindCSS, deployed on Cloudflare Pages
+- **Backend**: FastAPI, Python 3.12, Google Gemini AI, deployed on Google Cloud Run
 - **Cloud Platform**: Google Cloud Platform (GCP)
 - **Database**: Document-based system with markdown files
 - **Deployment**: Google Cloud Run
@@ -35,7 +35,7 @@ production
 https://yanir-portfolio.pages.dev
 
 ## Repository
-https://github.com/yourusername/gemini-portfolio
+https://github.com/Yanir-R/gemini-portfolio
 
 ## Media
 https://i.ibb.co/wZdp34Tw/Screenshot-2025-07-30-at-14-30-25.png
