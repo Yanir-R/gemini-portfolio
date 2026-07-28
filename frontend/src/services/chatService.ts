@@ -3,6 +3,13 @@ import { apiClient } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/endpoints';
 import { ChatMessage } from '@/types/chat';
 
+/**
+ * Kept below the backend's MAX_HISTORY_MESSAGES (40). The server only replays the
+ * last few turns to the model regardless, so sending more costs bandwidth and
+ * buys nothing.
+ */
+const MAX_HISTORY_SENT = 20;
+
 interface ChatResponse {
     response: string;
     is_email_collection?: boolean;
@@ -12,28 +19,28 @@ interface ChatResponse {
 }
 
 export const chatService = {
-    checkFiles: async () => {
-        const response = await apiClient.get(API_ENDPOINTS.CHECK_FILES);
-        const data = response.data;
+    /**
+     * Whether the backend has content to ground its answers in. The endpoint this
+     * replaced also returned server filesystem paths and document filenames; none
+     * of it was ever read here beyond this one boolean.
+     */
+    checkKnowledge: async () => {
+        const response = await apiClient.get<{ knowledge_ready: boolean }>(
+            API_ENDPOINTS.CHAT_STATUS
+        );
 
-        return {
-            hasFiles: data.private_files?.length > 0,
-            paths: {
-                docsDir: data.docs_dir,
-                privateDir: data.private_dir,
-                exists: {
-                    docs: data.docs_exists,
-                    private: data.private_exists,
-                },
-                privateFiles: data.private_files,
-            },
-        };
+        return { ready: response.data?.knowledge_ready === true };
     },
     sendMessage: async (message: string, conversationHistory: ChatMessage[]) => {
         try {
             const response = await apiClient.post<ChatResponse>(API_ENDPOINTS.CHAT, {
                 message,
-                conversation_history: conversationHistory.map((msg) => ({
+                // The backend caps history length and rejects anything longer with
+                // a 422. That cap is a server-side guard against a hand-crafted
+                // request; a visitor simply having a long conversation must not
+                // trip it, so the client stays well under it. Only the tail is
+                // used for context anyway.
+                conversation_history: conversationHistory.slice(-MAX_HISTORY_SENT).map((msg) => ({
                     type: msg.type,
                     content: msg.content,
                     is_email_collection: msg.is_email_collection,
@@ -59,7 +66,16 @@ export const chatService = {
                     errorMessage =
                         "I couldn't find any content in the available files to answer your question.";
                 } else if (error.response?.status === 422) {
-                    errorMessage = 'There was an issue with the message format. Please try again.';
+                    errorMessage = 'That message was too long to send. Try a shorter one.';
+                } else if (error.response?.status === 429) {
+                    // The backend already computed exactly how long the window has
+                    // left and returned it as Retry-After. Telling the visitor "a
+                    // moment" while holding the real number helps nobody.
+                    const retryAfter = Number(error.response.headers?.['retry-after']);
+                    errorMessage =
+                        Number.isFinite(retryAfter) && retryAfter > 0
+                            ? `Too many messages just now. Try again in ${retryAfter} second${retryAfter === 1 ? '' : 's'}.`
+                            : 'Too many messages just now. Give it a moment and try again.';
                 } else if (error.response?.data?.detail) {
                     errorMessage = error.response.data.detail;
                 }

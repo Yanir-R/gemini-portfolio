@@ -7,12 +7,18 @@ interface MessageAvatarProps {
     avatar?: string;
 }
 
+/*
+ * A speaker mark. Decorative only - the transcript already alternates, and the
+ * bubble styling distinguishes the two sides - so it is hidden from assistive
+ * technology rather than read out as a stray letter before every message.
+ */
 export const MessageAvatar: React.FC<MessageAvatarProps> = ({ type }) => (
     <div
-        className={`flex relative flex-shrink-0 justify-center items-center w-9 h-9 rounded-xl transition-all duration-300 ease-out transform ${MESSAGE_STYLES[type as keyof typeof MESSAGE_STYLES]} hover:scale-105 before:absolute before:inset-0 before:rounded-xl before:bg-gradient-to-br before:from-white/5 before:to-transparent before:opacity-0 before:hover:opacity-100 before:transition-opacity before:duration-300`}
+        aria-hidden="true"
+        className={`flex flex-shrink-0 justify-center items-center w-8 h-8 rounded font-mono text-[0.6rem] uppercase tracking-wider ${
+            MESSAGE_STYLES[type as keyof typeof MESSAGE_STYLES]
+        }`}
     >
-        <span className="relative z-10 text-lg">
-            {MESSAGE_AVATARS[type as keyof typeof MESSAGE_AVATARS]}
-        </span>
+        {MESSAGE_AVATARS[type as keyof typeof MESSAGE_AVATARS]}
     </div>
 );

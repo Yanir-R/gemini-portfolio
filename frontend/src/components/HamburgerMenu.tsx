@@ -12,16 +12,17 @@ const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ isOpen, onClick }) => {
             onClick={onClick}
             aria-label={isOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={isOpen}
+            aria-controls="mobile-menu"
         >
-            <div className="space-y-2">
+            <div className="space-y-1.5">
                 <span
-                    className={`block w-8 h-0.5 bg-white transition-transform duration-300 ${isOpen ? 'rotate-45 translate-y-2.5' : ''}`}
+                    className={`block w-6 h-px bg-content transition-transform duration-200 ${isOpen ? 'rotate-45 translate-y-2' : ''}`}
                 />
                 <span
-                    className={`block w-8 h-0.5 bg-white transition-opacity duration-300 ${isOpen ? 'opacity-0' : ''}`}
+                    className={`block w-6 h-px bg-content transition-opacity duration-200 ${isOpen ? 'opacity-0' : ''}`}
                 />
                 <span
-                    className={`block w-8 h-0.5 bg-white transition-transform duration-300 ${isOpen ? '-rotate-45 -translate-y-2.5' : ''}`}
+                    className={`block w-6 h-px bg-content transition-transform duration-200 ${isOpen ? '-rotate-45 -translate-y-2' : ''}`}
                 />
             </div>
         </button>

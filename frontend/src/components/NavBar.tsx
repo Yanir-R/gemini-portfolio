@@ -1,24 +1,34 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router';
 import HamburgerMenu from '@/components/HamburgerMenu';
 import SocialLinks from '@/components/SocialLinks';
 import NavLinks from '@/components/NavLinks';
 
+/*
+ * The wordmark was a gradient that swapped hue on hover, next to a lightning
+ * bolt that faded in and rotated. Two animations and four colours on the one
+ * element whose job is to sit still and say whose site this is.
+ */
 const NavBar: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [scrolled, setScrolled] = useState(false);
 
-    // Handle navbar background on scroll
     useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 20);
-        };
-        window.addEventListener('scroll', handleScroll);
+        const handleScroll = () => setScrolled(window.scrollY > 20);
+        window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    // The menu locks body scroll while open, so the class has to come off on
+    // unmount too - otherwise navigating away mid-transition leaves the page
+    // unscrollable.
+    useEffect(() => () => document.body.classList.remove('menu-open'), []);
+
     const toggleMenu = () => {
-        setIsMenuOpen(!isMenuOpen);
-        document.body.classList.toggle('menu-open');
+        setIsMenuOpen((open) => {
+            document.body.classList.toggle('menu-open', !open);
+            return !open;
+        });
     };
 
     const closeMenu = () => {
@@ -28,86 +38,52 @@ const NavBar: React.FC = () => {
 
     return (
         <>
-            {/* Spacer div - different height for mobile */}
-            <div
-                className={`h-16 lg:h-20 transition-all duration-300 ${isMenuOpen ? 'mb-[280px]' : ''}`}
-            ></div>
+            {/* Spacer matching the fixed bar's height. */}
+            <div className="h-16 lg:h-20" />
 
-            <nav
-                className={`
-                fixed top-0 left-0 right-0 z-50 font-sans
-                transition-all duration-300 ease-in-out
-                ${
-                    scrolled
-                        ? 'border-b shadow-lg backdrop-blur-md bg-gray-900/80 border-purple-500/10'
-                        : 'bg-transparent backdrop-blur-sm'
-                }
-            `}
+            <header
+                className={`fixed top-0 right-0 left-0 z-50 transition-colors duration-200 ${
+                    scrolled ? 'border-b bg-ink-900/85 border-border backdrop-blur-md' : ''
+                }`}
             >
                 <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16 lg:h-20">
-                        <div className="flex items-center">
-                            <a
-                                href="/"
-                                className="flex items-center space-x-2 transition-all duration-300 group hover:scale-105"
-                                aria-label="Home"
-                            >
-                                <span className="relative font-mono text-2xl font-bold lg:text-3xl">
-                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 transition-all duration-300 group-hover:from-cyan-500 group-hover:to-blue-500">
-                                        Yanir.dev
-                                    </span>
-                                    <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-400 to-pink-600 group-hover:w-full transition-all duration-300"></span>
-                                </span>
-                                <span className="text-xl opacity-0 transition-all duration-300 transform lg:text-2xl group-hover:opacity-100 group-hover:rotate-12 group-hover:translate-x-1">
-                                    ⚡
-                                </span>
-                            </a>
+                        {/* The wordmark was "yanir.dev", a domain this site does
+                            not use - it is served from a pages.dev address. A
+                            wordmark asserting an address that resolves nowhere is
+                            the one piece of chrome that must not be aspirational,
+                            so it is simply the name. */}
+                        <Link
+                            to="/"
+                            className="font-mono text-base tracking-tight transition-colors duration-200 text-content hover:text-signal"
+                            aria-label="Home"
+                        >
+                            Yanir Rot
+                        </Link>
+
+                        <div className="hidden gap-8 items-center lg:flex">
+                            <NavLinks />
+                            <div className="w-px h-4 bg-border" aria-hidden="true" />
+                            <SocialLinks className="flex gap-5 items-center" />
                         </div>
 
-                        {/* Desktop Navigation */}
-                        <div className="hidden items-center lg:flex">
-                            <div className="flex items-center space-x-8">
-                                <NavLinks />
-                                <div className="w-px h-6 bg-gradient-to-b from-transparent to-transparent via-purple-500/20"></div>
-                                <SocialLinks className="flex items-center space-x-6" />
-                            </div>
-                        </div>
-
-                        {/* Mobile menu button */}
                         <HamburgerMenu isOpen={isMenuOpen} onClick={toggleMenu} />
                     </div>
                 </div>
 
                 <div
-                    className={`
-                        lg:hidden absolute top-16 left-0 right-0
-                        transform transition-all duration-300 ease-in-out bg-gray-900/95 backdrop-blur-md
-                        ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-                    `}
+                    id="mobile-menu"
+                    className={`lg:hidden absolute inset-x-0 top-16 border-y bg-ink-900/97 border-border backdrop-blur-md transition-opacity duration-200 ${
+                        isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
+                    hidden={!isMenuOpen}
                 >
-                    <div className="px-2 pt-2 pb-3 space-y-1 border-t shadow-lg border-purple-500/10">
-                        <div className="p-3 mx-2 mb-4 rounded-xl border shadow-lg backdrop-blur-sm transition-all duration-300 bg-gray-800/50 border-purple-500/10 hover:bg-gray-800/60">
-                            <div className="flex items-center mb-3 space-x-2">
-                                <div className="flex space-x-1.5">
-                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-error/90 shadow-red-500/20"></div>
-                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-warning/90 shadow-yellow-500/20"></div>
-                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-online/90 shadow-green-500/20"></div>
-                                </div>
-                                <span className="ml-2 font-mono text-sm text-gray-400">
-                                    ~/navigation
-                                </span>
-                            </div>
-                            <div className="transform transition-all duration-300 hover:scale-[1.01]">
-                                <NavLinks isMobile onNavigate={closeMenu} />
-                            </div>
-                        </div>
-
-                        <div className="px-4 py-3 mx-2 mb-2 rounded-lg backdrop-blur-sm bg-gray-800/30">
-                            <SocialLinks className="flex justify-center space-x-4" />
-                        </div>
+                    <NavLinks isMobile onNavigate={closeMenu} />
+                    <div className="px-4 py-4 border-t border-border">
+                        <SocialLinks className="flex gap-5 items-center" />
                     </div>
                 </div>
-            </nav>
+            </header>
         </>
     );
 };

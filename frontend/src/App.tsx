@@ -6,13 +6,11 @@ import About from '@/pages/About';
 import Blog from '@/pages/Blog';
 import Projects from '@/pages/Projects';
 import ProjectDetail from '@/pages/ProjectDetail';
-import ParticleBackground from '@/components/ParticleBackground';
 
 const App: React.FC = () => {
     return (
         <Router>
-            <div className="min-h-screen text-white">
-                <ParticleBackground />
+            <div className="min-h-screen text-content">
                 <div className="relative z-10">
                     <NavBar />
                     <Routes>

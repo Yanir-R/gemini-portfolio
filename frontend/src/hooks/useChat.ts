@@ -29,17 +29,21 @@ export const useChat = () => {
 
         const initializeChat = async () => {
             try {
-                const response = await chatService.checkFiles();
+                const response = await chatService.checkKnowledge();
                 if (cancelled) return;
 
-                setHasFiles(response.hasFiles);
+                setHasFiles(response.ready);
 
-                if (!response.hasFiles) {
+                if (!response.ready) {
                     setChatHistory((prev) => [
                         ...prev,
                         {
                             type: 'system',
-                            content: '⚠️ No files are currently available in the system.',
+                            // The system message type already renders in the
+                            // caution colour, so a warning emoji was saying the
+                            // same thing twice, less precisely.
+                            content:
+                                "The assistant is offline: it has no notes to answer from, so it won't answer at all rather than guess.",
                         },
                     ]);
                 }
@@ -53,7 +57,7 @@ export const useChat = () => {
                     {
                         type: 'system',
                         content:
-                            '⚠️ Error initializing chat. Please refresh the page if the issue persists.',
+                            'The assistant could not reach its notes. Reload to try again; the project write-ups are still readable under Work.',
                     },
                 ]);
             }
@@ -131,11 +135,12 @@ export const useChat = () => {
 
             if (result.success) {
                 if (result.email_collected) {
-                    // Add the system confirmation message
+                    // `confirm`, not `system`: this is the success case, and the
+                    // system style is the amber one used for warnings.
                     setChatHistory((prev) => [
                         ...prev,
                         {
-                            type: 'system',
+                            type: 'confirm',
                             content: result.response || '',
                             email_collected: true,
                         },
@@ -172,7 +177,16 @@ export const useChat = () => {
                     ...prev,
                     {
                         type: 'system',
-                        content: `❌ ${result.error}`,
+                        // chatService already writes these messages for the
+                        // visitor, including the exact retry window on a 429.
+                        // Prefixing a cross undoes that work.
+                        //
+                        // `error` is optional on the result, and the previous
+                        // template literal hid that: an undefined error
+                        // rendered as the string "undefined" after the emoji.
+                        content:
+                            result.error ??
+                            'That message did not go through. Try sending it again.',
                     },
                 ]);
             }

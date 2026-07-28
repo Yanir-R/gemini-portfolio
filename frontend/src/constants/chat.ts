@@ -1,89 +1,111 @@
 import { QuickMessageOption, MessageType } from '@/types/chat';
 
+/*
+ * Speaker marks, not emoji.
+ *
+ * Every message previously carried a decorative emoji on a coloured gradient
+ * chip - a robot for the assistant, a bust for the visitor, a pointing finger
+ * for a suggested question. Five gradients competing in a transcript that is
+ * meant to be read.
+ *
+ * A short mono mark does the same job (whose turn is this) and keeps the
+ * transcript quiet. "Y" is deliberate: the assistant answers in Yanir's first
+ * person, so labelling it a robot misrepresented what it is.
+ */
 export const MESSAGE_AVATARS: Record<MessageType, string> = {
-    user: '👤',
-    system: 'ℹ️',
-    ai: '🤖',
-    initial: '🤖',
-    quick: '👆',
+    user: 'You',
+    system: '!',
+    confirm: '✓',
+    ai: 'Y',
+    initial: 'Y',
+    quick: 'You',
 } as const;
 
 export const MESSAGE_STYLES: Record<MessageType, string> = {
-    user: 'bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg shadow-blue-500/20',
-    system: 'bg-gradient-to-br from-gray-400 to-gray-600 shadow-lg shadow-gray-500/20',
-    ai: 'bg-gradient-to-br from-brand-purple-light to-brand-purple-dark shadow-lg shadow-brand-purple/30',
-    initial: 'bg-gradient-to-br from-pink-400 to-pink-600 shadow-lg shadow-pink-500/30',
-    quick: 'bg-gradient-to-br from-green-400 to-green-600 shadow-lg shadow-green-500/20',
+    user: 'bg-ink-700 text-muted border border-border',
+    system: 'bg-ink-800 text-caution border border-caution/30',
+    confirm: 'bg-ink-800 text-signal border border-signal/30',
+    ai: 'bg-ink-800 text-signal border border-signal/30',
+    initial: 'bg-ink-800 text-signal border border-signal/30',
+    quick: 'bg-ink-700 text-muted border border-border',
 } as const;
 
+/*
+ * Suggested openers.
+ *
+ * Reworded from the generic set ("Learn about my journey", "Discover my
+ * expertise") to questions a visitor would actually type. The third one is
+ * deliberately a question the corpus cannot fully answer, so a visitor sees the
+ * assistant decline early rather than discovering that behaviour by accident.
+ */
 export const INITIAL_QUESTIONS: QuickMessageOption[] = [
     {
-        icon: '💼',
-        title: 'Experience',
-        description: 'Learn about my journey',
-        message: 'Tell me about your experience',
+        title: 'What have you built?',
+        description: 'Shipped work, and what was hard about it',
+        message: 'What projects have you built?',
         nextQuestions: [
             {
-                icon: '💻',
-                title: 'Tech Stack',
-                description: 'Preferred technologies',
+                title: 'What do you work in?',
+                description: 'Languages, frameworks, tools',
                 message: "What's your preferred tech stack?",
             },
             {
-                icon: '🌟',
-                title: 'Specialization',
-                description: 'Core strengths',
-                message: 'What are you specialized in?',
+                title: 'What broke?',
+                description: 'Failures worth reading about',
+                message: 'What is the hardest bug you have had to track down?',
             },
         ],
     },
     {
-        icon: '🎯',
-        title: 'Skills',
-        description: 'Discover my expertise',
-        message: 'What are your main skills?',
+        title: 'How do you work?',
+        description: 'Habits, and what you care about',
+        message: 'How do you approach building something new?',
         nextQuestions: [
             {
-                icon: '📈',
-                title: 'Achievements',
-                description: 'Key milestones',
-                message: 'What are your main achievements?',
+                title: 'Where did you work?',
+                description: 'Roles and background',
+                message: 'Tell me about your experience',
             },
             {
-                icon: '💡',
-                title: 'Learning',
-                description: 'Growth mindset',
+                title: 'What are you learning?',
+                description: 'Current direction',
                 message: 'What are you currently learning?',
             },
         ],
     },
     {
-        icon: '🚀',
-        title: 'Projects',
-        description: 'Explore my work',
-        message: 'Can you tell me about your projects and showcase some of your best work?',
+        title: 'Try to stump it',
+        description: 'A question the notes do not cover',
+        message: 'How many years of Rust experience do you have?',
         nextQuestions: [
             {
-                icon: '⭐',
-                title: 'Featured',
-                description: 'Top projects',
-                message: 'What are your most impressive projects?',
+                title: 'Ask something specific',
+                description: 'Dates, numbers, details',
+                message: 'What is your day rate?',
             },
             {
-                icon: '🔧',
-                title: 'Technologies',
-                description: 'Tech used',
+                title: 'Back to the work',
+                description: 'Projects and how they were built',
                 message: 'What technologies did you use in your projects?',
             },
         ],
     },
 ] as const;
 
+/*
+ * `message` is sent as the *visitor's* turn and appears in the transcript above
+ * their own avatar, so it has to be written in their voice. It previously read
+ * "Hey! 👋 I'd love to connect with you! Please share your email address..." -
+ * Yanir's side of the exchange, attributed to the person reading it, which made
+ * the following reply a non-sequitur.
+ *
+ * The wording also has to contain a phrase from the backend's
+ * CONTACT_INTENT_PHRASES, or clicking the button would go to the model instead
+ * of opening the contact flow.
+ */
 export const FINAL_QUESTION: QuickMessageOption = {
-    icon: '✉️',
-    title: 'Send Me an Email',
-    description: "Let's connect via email",
-    message:
-        "Hey! 👋\nI'd love to connect with you! Please share your email address and a brief message about what you'd like to discuss - whether it's a project collaboration, job opportunity, or just to connect. I'll make sure to get back to you soon! Looking forward to our conversation! 📧",
+    title: 'Get in touch',
+    description: 'Leave an email address and Yanir replies directly',
+    message: "I'd like to get in touch.",
     isEmailRelated: true,
 };
