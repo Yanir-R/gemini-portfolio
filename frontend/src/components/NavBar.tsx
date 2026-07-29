@@ -47,6 +47,9 @@ const NavBar: React.FC = () => {
     // instead would be a setState during render commit, which is both a lint
     // error and an extra render for something the handler already knows.
     const eatenRef = useRef(false);
+    // The scroll listener is bound once; a ref lets it read the menu's current
+    // state instead of the value captured when it was registered.
+    const isMenuOpenRef = useRef(false);
 
     // Distance from the wordmark's right edge to the centre of the hamburger.
     const [eatX, setEatX] = useState(0);
@@ -77,9 +80,30 @@ const NavBar: React.FC = () => {
         chompTimer.current = setTimeout(() => setIsChomping(false), CHOMP_MS);
     }, []);
 
+    const closeMenu = useCallback(() => {
+        isMenuOpenRef.current = false;
+        setIsMenuOpen(false);
+    }, []);
+
     useEffect(() => {
         const handleScroll = () => {
             const y = window.scrollY;
+
+            // Scrolling with the menu open means the visitor has moved on from
+            // it, so it closes rather than sitting over content being read.
+            //
+            // This works only because the menu no longer locks body scroll. It
+            // used to add `overflow: hidden` to the body, which meant a scroll
+            // gesture with the menu open produced no scroll and therefore no
+            // event: the page refused to move and the panel stayed put, which
+            // is exactly the behaviour that felt broken. A scroll lock is for a
+            // full-screen overlay; this is a small dropdown, and letting the
+            // page move is both simpler and what a visitor expects.
+            if (isMenuOpenRef.current) {
+                closeMenu();
+                lastScrollY.current = y;
+                return;
+            }
 
             if (y <= SCROLL_REVEAL_ABOVE) {
                 setEaten(false);
@@ -94,7 +118,7 @@ const NavBar: React.FC = () => {
 
         window.addEventListener('scroll', handleScroll, { passive: true });
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [setEaten]);
+    }, [setEaten, closeMenu]);
 
     useEffect(
         () => () => {
@@ -103,21 +127,12 @@ const NavBar: React.FC = () => {
         []
     );
 
-    // The menu locks body scroll while open, so the class has to come off on
-    // unmount too - otherwise navigating away mid-transition leaves the page
-    // unscrollable.
-    useEffect(() => () => document.body.classList.remove('menu-open'), []);
-
     const toggleMenu = () => {
         setIsMenuOpen((open) => {
-            document.body.classList.toggle('menu-open', !open);
-            return !open;
+            const next = !open;
+            isMenuOpenRef.current = next;
+            return next;
         });
-    };
-
-    const closeMenu = () => {
-        setIsMenuOpen(false);
-        document.body.classList.remove('menu-open');
     };
 
     // Swallowing the name while the menu is open would hide the way back home

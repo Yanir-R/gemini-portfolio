@@ -125,11 +125,6 @@ input {
     }
 }
 
-/* Prevent body scroll while the mobile menu is open. */
-body.menu-open {
-    overflow: hidden;
-}
-
 /*
  * The wordmark being eaten by the hamburger.
  *
