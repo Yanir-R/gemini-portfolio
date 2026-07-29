@@ -20,3 +20,8 @@ node_modules/
 
 # Include the gcloudignore itself
 !.gcloudignore 
+# Test and evaluation assets: not needed to serve traffic.
+tests/
+evals/
+pytest.ini
+requirements-dev.txt

@@ -1,12 +1,65 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router';
-import { Project } from '@/types/project';
+import { useParams, Link } from 'react-router';
+import { Project, STATUS_STYLES, DEFAULT_STATUS_STYLE } from '@/types/project';
 import { projectService } from '@/services/projectService';
-import { getProjectTerminalContent } from '@/utils/projectContent';
+import Markdown from '@/components/Markdown';
+
+/*
+ * The write-up, set as a document.
+ *
+ * The body was previously wrapped in terminal chrome - three window dots, a
+ * fake prompt reading `cat project-details.md` - and set in monospace at 14px.
+ * It is prose about how something was built, and dressing prose as shell output
+ * made a long read harder for the sake of a costume. Mono is reserved for the
+ * things the machine reports about itself.
+ *
+ * More consequentially, that body came from `utils/projectContent.ts`: a
+ * hand-maintained second copy of each write-up, hardcoded in the frontend, 144
+ * lines long, and already visibly diverged from the markdown the backend serves.
+ * The API returns the real document as `project.content` - the same text
+ * context.py assembles into the chat's corpus - so the page now renders that.
+ *
+ * This is what makes "the site keeps one corpus" true rather than aspirational:
+ * what you read here and what the assistant answers from are now the same
+ * bytes, and editing the markdown updates both.
+ *
+ * The overview also had a fallback of "An innovative project showcasing modern
+ * development practices", which is what a page says when it has nothing to say.
+ * A missing overview now renders nothing.
+ */
+const TECH_SHOWN_COLLAPSED = 6;
+
+/*
+ * Sections the backend parses into metadata, which must not also be rendered as
+ * body copy. `## Status` / `paused` already appears as a chip, `## Overview` as
+ * the lede, and `## Media` is a bare image URL - printing them again at the foot
+ * of the write-up read as a form someone forgot to delete.
+ */
+const METADATA_HEADINGS = [
+    'Overview',
+    'Project Type',
+    'Status',
+    'Demo URL',
+    'Repository',
+    'Media',
+    'Featured',
+    'Category',
+    'License',
+];
+
+const stripMetadataSections = (markdown: string): string =>
+    markdown
+        // Split on level-2 headings, keeping the heading with its section.
+        .split(/\n(?=## )/)
+        .filter((section) => {
+            const heading = section.match(/^## (.+)$/m)?.[1]?.trim();
+            return !heading || !METADATA_HEADINGS.includes(heading);
+        })
+        .join('\n')
+        .trim();
 
 const ProjectDetail: React.FC = () => {
     const { slug } = useParams<{ slug: string }>();
-    const navigate = useNavigate();
     const [project, setProject] = useState<Project | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -21,11 +74,12 @@ const ProjectDetail: React.FC = () => {
             try {
                 setLoading(true);
                 setError(null);
-                const fetchedProject = await projectService.getProjectBySlug(projectSlug);
-                if (!cancelled) setProject(fetchedProject);
+                const fetched = await projectService.getProjectBySlug(projectSlug);
+                if (!cancelled) setProject(fetched);
             } catch (err) {
-                if (!cancelled)
-                    setError(err instanceof Error ? err.message : 'Failed to fetch project');
+                if (!cancelled) {
+                    setError(err instanceof Error ? err.message : 'The request failed.');
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -40,46 +94,32 @@ const ProjectDetail: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen pt-20 px-4">
-                <div className="max-w-5xl mx-auto">
-                    <div className="animate-pulse space-y-8">
-                        <div className="w-3/4 h-12 bg-dark-tertiary rounded mb-6"></div>
-                        <div className="w-full h-64 bg-dark-tertiary rounded mb-8"></div>
-                        <div className="space-y-4">
-                            <div className="w-full h-4 bg-dark-tertiary rounded"></div>
-                            <div className="w-5/6 h-4 bg-dark-tertiary rounded"></div>
-                            <div className="w-4/6 h-4 bg-dark-tertiary rounded"></div>
-                        </div>
-                    </div>
-                </div>
+            <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-3xl">
+                <p className="font-mono text-sm text-muted" role="status">
+                    Loading<span className="animate-blink">…</span>
+                </p>
             </div>
         );
     }
 
     if (error || !project) {
         return (
-            <div className="min-h-screen pt-20 px-4">
-                <div className="max-w-5xl mx-auto text-center py-20">
-                    <div className="text-6xl mb-4">❌</div>
-                    <h1 className="text-2xl font-bold text-white mb-4">Project not found</h1>
-                    <p className="text-gray-400 mb-8">
-                        {error || "The project you're looking for doesn't exist."}
-                    </p>
-                    <div className="flex gap-4 justify-center">
-                        <button
-                            onClick={() => navigate('/projects')}
-                            className="px-6 py-2 bg-brand-purple hover:bg-brand-purple-dark rounded-lg transition-colors"
-                        >
-                            View All Projects
-                        </button>
-                        <button
-                            onClick={() => navigate('/')}
-                            className="px-6 py-2 border border-border hover:border-brand-purple-light rounded-lg transition-colors"
-                        >
-                            Go Home
-                        </button>
-                    </div>
-                </div>
+            <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-3xl">
+                <p className="label">Not found</p>
+                <h1 className="mt-3 text-2xl font-semibold tracking-tight text-content">
+                    No write-up at this address.
+                </h1>
+                <p className="mt-3 leading-relaxed text-muted">
+                    {error
+                        ? 'The backend did not return this project.'
+                        : 'That project does not exist, or its slug has changed.'}
+                </p>
+                <Link
+                    to="/projects"
+                    className="inline-block px-3 py-1.5 mt-5 font-mono text-xs tracking-wider uppercase rounded border transition-colors duration-200 text-content border-border hover:border-border-hover"
+                >
+                    All work
+                </Link>
             </div>
         );
     }
@@ -87,193 +127,124 @@ const ProjectDetail: React.FC = () => {
     const mediaUrl = projectService.getProjectMediaUrl(project);
     const techStack = projectService.getProjectTechStack(project);
     const isVideo = project.media && projectService.isVideoFile(project.media);
+    const content = project.content ? stripMetadataSections(project.content) : '';
+    const canCollapse = techStack.length > TECH_SHOWN_COLLAPSED;
+    const shownTech =
+        canCollapse && !showAllTech ? techStack.slice(0, TECH_SHOWN_COLLAPSED) : techStack;
 
     return (
-        <div className="min-h-screen pt-20 px-4">
-            <div className="max-w-5xl mx-auto">
-                {/* Back Button */}
-                <Link
-                    to="/projects"
-                    className="inline-flex items-center gap-2 text-brand-purple-light hover:text-brand-pink transition-colors mb-8 group font-medium"
-                >
-                    <span className="group-hover:-translate-x-1 transition-transform">←</span>
-                    Back to Projects
-                </Link>
+        <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-3xl">
+            <Link
+                to="/projects"
+                className="font-mono text-xs tracking-wider uppercase transition-colors duration-200 text-muted hover:text-content"
+            >
+                <span aria-hidden="true">←</span> All work
+            </Link>
 
-                {/* Header Section */}
-                <div className="mb-12">
-                    <div className="flex items-start gap-4 mb-6">
-                        <div>
-                            <h1 className="text-4xl md:text-5xl font-bold text-white mb-3 leading-tight">
-                                {project.title}
-                            </h1>
-                            <p className="text-xl text-gray-400 leading-relaxed max-w-3xl">
-                                {project.overview ||
-                                    'An innovative project showcasing modern development practices'}
-                            </p>
-                        </div>
-                    </div>
+            <header className="mt-6">
+                <h1 className="text-3xl font-semibold tracking-tight leading-tight text-content sm:text-4xl">
+                    {project.title}
+                </h1>
 
-                    {/* Project Status & Links */}
-                    <div className="flex flex-wrap gap-3 mb-8">
-                        {project.status && (
-                            <span className="px-3 py-1.5 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg text-sm font-medium">
-                                {project.status}
-                            </span>
-                        )}
-                        {project.category && (
-                            <span className="px-3 py-1.5 bg-brand-purple/20 text-brand-purple-light border border-brand-purple/30 rounded-lg text-sm font-medium">
-                                {project.category}
-                            </span>
-                        )}
-                        {project.demo_url && (
-                            <a
-                                href={project.demo_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-sm font-medium hover:bg-green-500/30 transition-colors"
-                            >
-                                🌐 Go to Project Website
-                            </a>
-                        )}
-                    </div>
-
-                    {/* Media Section */}
-                    {mediaUrl && (
-                        <div className="mb-8 rounded-xl overflow-hidden bg-dark-tertiary border border-border">
-                            {isVideo ? (
-                                <video
-                                    className="w-full h-auto max-h-[500px] object-cover"
-                                    controls
-                                    poster={mediaUrl.replace(/\.[^/.]+$/, '.jpg')}
-                                >
-                                    <source src={mediaUrl} type="video/mp4" />
-                                    Your browser does not support the video tag.
-                                </video>
-                            ) : (
-                                <img
-                                    src={mediaUrl}
-                                    alt={project.title}
-                                    className="w-full h-auto object-cover"
-                                />
-                            )}
-                        </div>
-                    )}
-                </div>
-
-                {/* Tech Stack */}
-                {techStack.length > 0 && (
-                    <div className="mb-12">
-                        <h3 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-                            <span className="text-2xl">⚡</span>
-                            Technology Stack
-                        </h3>
-                        <div className="flex flex-wrap gap-3">
-                            {(() => {
-                                const shouldShowButton = techStack.length > 6;
-                                const displayedTech =
-                                    shouldShowButton && !showAllTech
-                                        ? techStack.slice(0, 6)
-                                        : techStack;
-
-                                return (
-                                    <>
-                                        {displayedTech.map((tech, index) => (
-                                            <span
-                                                key={index}
-                                                className="px-4 py-2 bg-purple-900/40 text-purple-300 rounded-lg border border-purple-700/50 text-sm font-medium hover:bg-purple-800/40 transition-colors backdrop-blur-sm"
-                                            >
-                                                {tech}
-                                            </span>
-                                        ))}
-
-                                        {shouldShowButton && (
-                                            <button
-                                                onClick={() => setShowAllTech(!showAllTech)}
-                                                className="px-4 py-2 bg-gradient-to-r from-brand-purple to-brand-pink text-white rounded-lg border border-brand-purple/50 text-sm font-medium hover:from-brand-purple-dark hover:to-brand-pink-dark transition-all duration-300 transform hover:scale-105 flex items-center gap-2 shadow-lg hover:shadow-brand-purple/25"
-                                            >
-                                                {showAllTech ? (
-                                                    <>
-                                                        <span>Show Less</span>
-                                                        <span className="transform transition-transform duration-200 rotate-180">
-                                                            ↓
-                                                        </span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <span>+{techStack.length - 6} More</span>
-                                                        <span className="transform transition-transform duration-200">
-                                                            ↓
-                                                        </span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        )}
-                                    </>
-                                );
-                            })()}
-                        </div>
-                    </div>
+                {project.overview && (
+                    <p className="mt-4 text-lg leading-relaxed text-muted">{project.overview}</p>
                 )}
 
-                {/* Content - Terminal Style */}
-                <div className="mb-16">
-                    <div className="p-6 rounded-lg border border-gray-700 shadow-lg bg-dark-terminal">
-                        <div className="flex gap-2 items-center mb-4">
-                            <div className="w-3 h-3 rounded-full bg-status-error"></div>
-                            <div className="w-3 h-3 rounded-full bg-status-warning"></div>
-                            <div className="w-3 h-3 rounded-full bg-status-online"></div>
-                            <span className="ml-2 text-sm text-gray-400">
-                                ~/projects/{project.slug}
-                            </span>
-                        </div>
-
-                        <div className="font-mono">
-                            <span className="text-green-400">➜</span>
-                            <span className="text-purple-400"> ~/projects/{project.slug}</span>
-                            <span className="text-white"> cat project-details.md</span>
-                        </div>
-
-                        <div className="mt-6 font-mono text-sm leading-relaxed text-gray-300">
-                            {(() => {
-                                const content = getProjectTerminalContent(project.slug);
-                                return content ? (
-                                    <div className="whitespace-pre-wrap">{content}</div>
-                                ) : (
-                                    <div className="text-gray-400">
-                                        Project details not available in terminal format.
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Footer Navigation */}
-                <div className="border-t border-border pt-8 pb-12">
-                    <div className="flex justify-between items-center">
-                        <Link
-                            to="/projects"
-                            className="inline-flex items-center gap-2 text-brand-purple-light hover:text-brand-pink transition-colors group font-medium"
+                <div className="flex flex-wrap gap-3 items-center mt-5 font-mono text-xs">
+                    {project.status && (
+                        <span
+                            className={`rounded border px-2 py-0.5 uppercase tracking-wider text-[0.62rem] ${
+                                STATUS_STYLES[project.status] ?? DEFAULT_STATUS_STYLE
+                            }`}
                         >
-                            <span className="group-hover:-translate-x-1 transition-transform">
-                                ←
-                            </span>
-                            All Projects
-                        </Link>
-
-                        <Link
-                            to="/about"
-                            className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors group font-medium"
+                            {project.status.replace('-', ' ')}
+                        </span>
+                    )}
+                    {project.category && <span className="text-muted">{project.category}</span>}
+                    {project.demo_url && (
+                        <a
+                            href={project.demo_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="transition-colors duration-200 text-muted hover:text-signal"
                         >
-                            About Me
-                            <span className="group-hover:translate-x-1 transition-transform">
-                                →
-                            </span>
-                        </Link>
-                    </div>
+                            Live site ↗
+                        </a>
+                    )}
+                    {project.repository && project.repository !== 'Private Repository' && (
+                        <a
+                            href={project.repository}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="transition-colors duration-200 text-muted hover:text-signal"
+                        >
+                            Source ↗
+                        </a>
+                    )}
                 </div>
-            </div>
+            </header>
+
+            {mediaUrl && (
+                <div className="overflow-hidden mt-8 rounded border bg-ink-800 border-border">
+                    {isVideo ? (
+                        <video className="w-full h-auto" controls preload="metadata">
+                            <source src={mediaUrl} type="video/mp4" />
+                        </video>
+                    ) : (
+                        <img src={mediaUrl} alt="" loading="lazy" className="w-full h-auto" />
+                    )}
+                </div>
+            )}
+
+            {techStack.length > 0 && (
+                <section className="mt-10">
+                    <h2 className="label">Built with</h2>
+                    <ul className="flex flex-wrap gap-2 mt-3 font-mono text-xs">
+                        {shownTech.map((tech) => (
+                            <li
+                                key={tech}
+                                className="px-2 py-1 rounded border text-muted border-border"
+                            >
+                                {tech}
+                            </li>
+                        ))}
+                        {canCollapse && (
+                            <li>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllTech((open) => !open)}
+                                    className="px-2 py-1 rounded border transition-colors duration-200 text-content border-border hover:border-border-hover"
+                                >
+                                    {showAllTech
+                                        ? 'Show fewer'
+                                        : `+${techStack.length - TECH_SHOWN_COLLAPSED} more`}
+                                </button>
+                            </li>
+                        )}
+                    </ul>
+                </section>
+            )}
+
+            {content && (
+                <section className="mt-10">
+                    <Markdown>{content}</Markdown>
+                </section>
+            )}
+
+            <nav className="flex justify-between items-center pt-8 mt-16 font-mono text-xs tracking-wider uppercase border-t border-border">
+                <Link
+                    to="/projects"
+                    className="transition-colors duration-200 text-muted hover:text-content"
+                >
+                    <span aria-hidden="true">←</span> All work
+                </Link>
+                <Link
+                    to="/about"
+                    className="transition-colors duration-200 text-muted hover:text-content"
+                >
+                    About <span aria-hidden="true">→</span>
+                </Link>
+            </nav>
         </div>
     );
 };

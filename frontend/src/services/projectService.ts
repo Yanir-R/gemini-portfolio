@@ -226,16 +226,17 @@ export class ProjectService {
         });
     }
 
+    /**
+     * The backend already returns a fetchable location: an absolute URL, or a
+     * root-relative path served from `public/` by the CDN. Nothing to resolve.
+     *
+     * This used to prefix root-relative paths with the backend host, which
+     * pointed screenshots at Cloud Run - the wrong destination, since moving
+     * static assets off a single-region container was the point of the CDN
+     * migration.
+     */
     getProjectMediaUrl(project: Project): string | null {
-        if (!project.media_url) return null;
-
-        // Handle relative URLs
-        if (project.media_url.startsWith('/')) {
-            const baseUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
-            return `${baseUrl}${project.media_url}`;
-        }
-
-        return project.media_url;
+        return project.media_url ?? null;
     }
 
     isVideoFile(filename: string): boolean {

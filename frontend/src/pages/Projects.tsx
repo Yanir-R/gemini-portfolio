@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
 import ProjectCard from '@/components/ProjectCard';
 import { Project } from '@/types/project';
 import { projectService } from '@/services/projectService';
 import ReturnHome from '@/components/ReturnHome';
 
+/*
+ * Loading and error states report, they do not perform.
+ *
+ * This page opened with a bouncing rocket, "Loading my projects..." and
+ * "Fetching the latest from my portfolio" on every visit - three lines of
+ * theatre for a request that usually resolves in under a second. The failure
+ * state was worse: an emoji, an apology, and a `<details>` element hiding the
+ * only sentence that told a visitor anything.
+ *
+ * Both now say what happened and what to do about it, in one line each.
+ */
 const Projects: React.FC = () => {
-    const navigate = useNavigate();
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    // Bumped by "Try Again" to re-run the fetch effect.
+    // Bumped by "Try again" to re-run the fetch effect.
     const [reloadToken, setReloadToken] = useState(0);
 
     useEffect(() => {
@@ -20,26 +29,22 @@ const Projects: React.FC = () => {
             try {
                 setLoading(true);
                 setError(null);
-                const fetchedProjects = await projectService.getAllProjects();
+                const fetched = await projectService.getAllProjects();
 
-                // Sort projects to show ReelSensei first, then by featured status
-                const sortedProjects = [...fetchedProjects].sort((a, b) => {
-                    // ReelSensei always comes first
-                    if (a.slug === 'reelsensei') return -1;
-                    if (b.slug === 'reelsensei') return 1;
-
-                    // Then sort by featured status
-                    if (a.featured && !b.featured) return -1;
-                    if (!a.featured && b.featured) return 1;
-
-                    // Keep original order for remaining projects
-                    return 0;
+                // Featured first, otherwise the order the backend returned. The
+                // previous version also pinned one project by slug, which meant
+                // the running order lived in two places and only one of them was
+                // editable without a deploy.
+                const sorted = [...fetched].sort((a, b) => {
+                    if (a.featured === b.featured) return 0;
+                    return a.featured ? -1 : 1;
                 });
 
-                if (!cancelled) setProjects(sortedProjects);
+                if (!cancelled) setProjects(sorted);
             } catch (err) {
-                if (!cancelled)
-                    setError(err instanceof Error ? err.message : 'Failed to fetch projects');
+                if (!cancelled) {
+                    setError(err instanceof Error ? err.message : 'The request failed.');
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -52,122 +57,61 @@ const Projects: React.FC = () => {
         };
     }, [reloadToken]);
 
-    const handleProjectClick = (project: Project) => {
-        navigate(`/projects/${project.slug}`);
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen pt-20 px-4">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center py-20">
-                        <div className="text-6xl mb-6 animate-bounce">🚀</div>
-                        <h2 className="text-2xl font-bold text-white mb-4">
-                            Loading my projects...
-                        </h2>
-                        <p className="text-gray-400 mb-8">Fetching the latest from my portfolio</p>
-                        <div className="flex items-center justify-center gap-2">
-                            <div className="w-3 h-3 bg-brand-purple rounded-full animate-pulse"></div>
-                            <div
-                                className="w-3 h-3 bg-brand-purple-light rounded-full animate-pulse"
-                                style={{ animationDelay: '0.2s' }}
-                            ></div>
-                            <div
-                                className="w-3 h-3 bg-brand-pink rounded-full animate-pulse"
-                                style={{ animationDelay: '0.4s' }}
-                            ></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    if (error) {
-        return (
-            <div className="min-h-screen pt-20 px-4">
-                <div className="max-w-4xl mx-auto text-center py-20">
-                    <div className="text-6xl mb-6">🔧</div>
-                    <h1 className="text-2xl font-bold text-white mb-4">
-                        Projects temporarily unavailable
-                    </h1>
-                    <div className="bg-dark-secondary/50 backdrop-blur-sm rounded-xl p-6 border border-border mb-8">
-                        <p className="text-gray-300 mb-4">
-                            I'm currently updating my project portfolio. The backend service appears
-                            to be offline or experiencing issues.
-                        </p>
-                        <details className="text-left">
-                            <summary className="text-brand-purple-light cursor-pointer hover:text-brand-pink transition-colors mb-2">
-                                Technical details
-                            </summary>
-                            <code className="text-xs text-gray-400 bg-dark-tertiary p-3 rounded-lg block font-mono">
-                                {error}
-                            </code>
-                        </details>
-                    </div>
-                    <div className="flex flex-wrap gap-4 justify-center">
-                        <button
-                            onClick={() => setReloadToken((token) => token + 1)}
-                            className="px-6 py-3 bg-brand-purple hover:bg-brand-purple-dark rounded-lg transition-colors font-semibold"
-                        >
-                            🔄 Try Again
-                        </button>
-                        <button
-                            onClick={() => (window.location.href = '/about')}
-                            className="px-6 py-3 border border-border hover:border-brand-purple-light rounded-lg transition-colors font-semibold"
-                        >
-                            📋 View My Resume
-                        </button>
-                        <button
-                            onClick={() => (window.location.href = '/')}
-                            className="px-6 py-3 border border-border hover:border-brand-purple-light rounded-lg transition-colors font-semibold"
-                        >
-                            🏠 Go Home
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="pt-20 px-4 overflow-x-hidden">
-            <div className="max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl md:text-4xl font-bold mb-3">
-                        <span className="bg-gradient-to-r from-brand-purple via-brand-purple-light to-brand-pink bg-clip-text text-transparent">
-                            My Projects
-                        </span>
-                    </h1>
-                    <p className="text-gray-300 text-base max-w-2xl mx-auto">
-                        Take a look around! Here are some of the projects I've been working on. I'm
-                        always learning and trying new things. Hope you find it interesting!
-                    </p>
-                </div>
+        <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-6xl">
+            <header className="max-w-2xl">
+                <p className="label">Work</p>
+                <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl text-content">
+                    Things I built, and what was hard about them.
+                </h1>
+                <p className="mt-3 leading-relaxed text-muted">
+                    Each write-up is also part of what the assistant on the home page answers from,
+                    so you can read it here or ask about it there.
+                </p>
+            </header>
 
-                {/* Projects Grid */}
-                {projects.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-4">
-                        {projects.map((project) => (
-                            <ProjectCard
-                                key={project.slug}
-                                project={project}
-                                onClick={() => handleProjectClick(project)}
-                                className="animate-fadeIn"
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-20">
-                        <div className="text-6xl mb-4">📂</div>
-                        <h3 className="text-xl font-semibold text-white mb-2">No projects yet</h3>
-                        <p className="text-gray-400 mb-6">
-                            I'm still building amazing projects. Check back soon!
-                        </p>
-                    </div>
-                )}
-            </div>
+            {loading && (
+                <p className="mt-10 font-mono text-sm text-muted" role="status">
+                    Loading<span className="animate-blink">…</span>
+                </p>
+            )}
+
+            {error && (
+                <div className="mt-10 max-w-xl">
+                    <h2 className="text-lg font-semibold tracking-tight text-content">
+                        The project list could not load.
+                    </h2>
+                    <p className="mt-2 leading-relaxed text-muted">
+                        The backend did not respond. Reload, or ask the assistant on the home page:
+                        it answers from the same write-ups.
+                    </p>
+                    <p className="mt-2 font-mono text-xs break-words text-muted/70">{error}</p>
+                    <button
+                        type="button"
+                        onClick={() => setReloadToken((token) => token + 1)}
+                        className="px-3 py-1.5 mt-4 font-mono text-xs tracking-wider uppercase rounded border transition-colors duration-200 text-content border-border hover:border-border-hover"
+                    >
+                        Try again
+                    </button>
+                </div>
+            )}
+
+            {!loading && !error && projects.length === 0 && (
+                <p className="mt-10 leading-relaxed text-muted">No write-ups published yet.</p>
+            )}
+
+            {!loading && !error && projects.length > 0 && (
+                <div className="grid grid-cols-1 gap-5 mt-10 md:grid-cols-2 lg:grid-cols-3">
+                    {projects.map((project) => (
+                        <ProjectCard
+                            key={project.slug}
+                            project={project}
+                            className="animate-fadeIn"
+                        />
+                    ))}
+                </div>
+            )}
+
             <ReturnHome />
         </div>
     );

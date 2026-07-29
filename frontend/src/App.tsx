@@ -4,15 +4,14 @@ import NavBar from '@/components/NavBar';
 import Home from '@/pages/Home';
 import About from '@/pages/About';
 import Blog from '@/pages/Blog';
+import WritingDetail from '@/pages/WritingDetail';
 import Projects from '@/pages/Projects';
 import ProjectDetail from '@/pages/ProjectDetail';
-import ParticleBackground from '@/components/ParticleBackground';
 
 const App: React.FC = () => {
     return (
         <Router>
-            <div className="min-h-screen text-white">
-                <ParticleBackground />
+            <div className="min-h-screen text-content">
                 <div className="relative z-10">
                     <NavBar />
                     <Routes>
@@ -21,6 +20,7 @@ const App: React.FC = () => {
                         <Route path="/projects" element={<Projects />} />
                         <Route path="/projects/:slug" element={<ProjectDetail />} />
                         <Route path="/blog" element={<Blog />} />
+                        <Route path="/blog/:slug" element={<WritingDetail />} />
                     </Routes>
                 </div>
             </div>

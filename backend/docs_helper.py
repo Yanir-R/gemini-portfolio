@@ -1,16 +1,38 @@
+"""File access for the documents the site publishes.
+
+Reading and parsing only. What the chat is allowed to know, and how that corpus
+is assembled and cached, is context.py's job.
+"""
+
 from pypdf import PdfReader
+import logging
 import os
 import re
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 # Get the absolute path of the current file's directory
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)) 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOCS_DIR = os.path.join(BASE_DIR, "docs")
-PRIVATE_DIR = os.path.join(DOCS_DIR, "private")
+
+# Yanir's own documents. Named for what it is: this repository is public and
+# these files are served over /api/content/, so everything in here is published.
+# It was called "private/", which claimed an access boundary that has never
+# existed and invited exactly the mistake of putting something sensitive in it.
+PROFILE_DIR = os.path.join(DOCS_DIR, "profile")
+
+# Placeholder documents for anyone forking this repo. Never loaded into the
+# chat's context - see the note in context.py about why an empty corpus fails
+# loudly instead of falling back to these.
 TEMPLATES_DIR = os.path.join(DOCS_DIR, "templates")
+
 PROJECTS_DIR = os.path.join(DOCS_DIR, "projects")
-STATIC_DIR = os.path.join(BASE_DIR, "static", "projects")
+
+# There is deliberately no STATIC_DIR. Project screenshots are frontend assets,
+# served from the CDN alongside the rest of the site; routing them through this
+# API would put static files back on a single-region container, which is the
+# arrangement the move to Cloudflare Pages existed to undo.
 
 def read_markdown_file(file_path: str) -> str:
     """Read content from markdown file"""
@@ -18,8 +40,8 @@ def read_markdown_file(file_path: str) -> str:
         with open(file_path, 'r', encoding='utf-8') as file:
             content = file.read()
             return content
-    except Exception as e:
-        print(f"Error reading file {file_path}: {str(e)}")
+    except Exception:
+        logger.exception("Error reading file %s", file_path)
         return ""
 
 def read_pdf_file(file_path: str) -> str:
@@ -27,34 +49,9 @@ def read_pdf_file(file_path: str) -> str:
     try:
         with open(file_path, 'rb') as file:
             return "\n".join(page.extract_text() for page in PdfReader(file).pages)
-    except Exception as e:
-        print(f"Error reading PDF file: {e}")
+    except Exception:
+        logger.exception("Error reading PDF file %s", file_path)
         return ""
-
-def read_directory(directory: str, doc_type: str) -> list[str]:
-    """Read all files from a directory"""
-    contents = []
-    if os.path.exists(directory):
-        for filename in os.listdir(directory):
-            if not filename.endswith(('.pdf', '.md')):
-                continue
-            
-            file_path = os.path.join(directory, filename)
-            content = read_pdf_file(file_path) if filename.endswith('.pdf') else read_markdown_file(file_path)
-            
-            if content:
-                contents.append(f"{doc_type} Document: {filename}\n---\n{content}\n---")
-    return contents
-
-def load_all_files() -> str:
-    """Load and combine content from all PDFs and MD files"""
-    # Try private files first, fall back to templates if none found
-    all_content = read_directory(PRIVATE_DIR, "Private")
-
-    if not all_content:
-        all_content = read_directory(TEMPLATES_DIR, "Template")
-
-    return "\n\n".join(all_content)
 
 def parse_project_metadata(content: str) -> Dict[str, Any]:
     """Parse project metadata from markdown content"""
@@ -152,18 +149,34 @@ def get_all_projects() -> List[Dict[str, Any]]:
                 metadata['slug'] = filename[:-3]  # Remove .md extension
                 metadata['content'] = content
                 
-                # Check for media file
+                # A `## Media` value is a location the browser can fetch: an
+                # absolute URL, or a root-relative path served by the frontend
+                # out of `public/`. Anything else is a mistake in the write-up.
+                #
+                # The alternative - a bare filename resolved against a backend
+                # static directory - was removed rather than kept. That
+                # directory did not exist, nothing mounted `/static`, and no
+                # write-up used the form, so the branch could only ever produce
+                # a URL that 404s. Serving screenshots from the API container
+                # would also undo the point of moving the frontend to a CDN.
                 media_name = metadata.get('media', '')
                 if media_name:
-                    # Check if it's an external URL
-                    if media_name.startswith(('http://', 'https://')):
+                    if media_name.startswith(('http://', 'https://', '/')):
                         metadata['has_media'] = True
                         metadata['media_url'] = media_name
                     else:
-                        # Local file path
-                        media_path = os.path.join(STATIC_DIR, media_name)
-                        metadata['has_media'] = os.path.exists(media_path)
-                        metadata['media_url'] = f"/static/projects/{media_name}" if metadata['has_media'] else None
+                        # Named rather than silently dropped: a screenshot that
+                        # does not appear is otherwise indistinguishable from a
+                        # write-up that never had one.
+                        logger.warning(
+                            "Project %s: media %r is neither an absolute URL nor a "
+                            "root-relative path, so it cannot be fetched. Put the file in "
+                            "frontend/public/projects/ and reference it as "
+                            "/projects/<name>.",
+                            filename, media_name,
+                        )
+                        metadata['has_media'] = False
+                        metadata['media_url'] = None
                 
                 # Parse featured as boolean (if not already parsed)
                 featured_value = metadata.get('featured', False)
@@ -190,12 +203,108 @@ def get_featured_projects() -> List[Dict[str, Any]]:
     """Get only featured projects"""
     return [p for p in get_all_projects() if p.get('featured', False)]
 
-def load_projects_content() -> str:
-    """Load all project content for AI context"""
-    projects = get_all_projects()
-    content_parts = []
-    
-    for project in projects:
-        content_parts.append(f"Project: {project.get('title', 'Untitled')}\n---\n{project.get('content', '')}\n---")
-    
-    return "\n\n".join(content_parts) 
+
+# ---------------------------------------------------------------------------
+# Writing
+# ---------------------------------------------------------------------------
+#
+# Long-form pieces and short posts published elsewhere, republished here with a
+# link back to the original. They live in the same docs tree as the projects and
+# are assembled into the same corpus, so what a visitor reads and what the chat
+# can answer from stay the same bytes.
+
+WRITING_DIR = os.path.join(DOCS_DIR, "writing")
+
+# `media` is deliberately plural here, unlike a project's single screenshot: a
+# post often carries two or three images and they are part of the argument.
+WRITING_SECTIONS = ("kind", "source", "url", "date", "media", "summary", "related")
+
+# Sections that hold a list, one item per line, rather than a single value.
+WRITING_LIST_SECTIONS = ("media", "related")
+
+
+def _parse_sections(content: str, section_names: tuple) -> Dict[str, List[str]]:
+    """Collect the body lines under each recognised `## Section`.
+
+    Returns every section as a list of lines so a caller can decide whether a
+    section is single-valued. Parsing stops a section at the next heading of any
+    level, so prose headings inside the article body cannot leak into metadata.
+    """
+    collected: Dict[str, List[str]] = {}
+    current: Optional[str] = None
+
+    for raw in content.split('\n'):
+        line = raw.strip()
+
+        if line.startswith('#'):
+            heading = line.lstrip('#').strip().lower().replace(' ', '_')
+            current = heading if (line.startswith('## ') and heading in section_names) else None
+            continue
+
+        if current and line:
+            collected.setdefault(current, []).append(line)
+
+    return collected
+
+
+def parse_writing_metadata(content: str) -> Dict[str, Any]:
+    """Metadata for one piece of writing, plus its title."""
+    sections = _parse_sections(content, WRITING_SECTIONS)
+
+    metadata: Dict[str, Any] = {}
+    for name, lines in sections.items():
+        metadata[name] = lines if name in WRITING_LIST_SECTIONS else lines[0]
+
+    title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
+    if title_match:
+        metadata['title'] = title_match.group(1).strip()
+
+    return metadata
+
+
+def get_all_writing() -> List[Dict[str, Any]]:
+    """Every piece, newest first.
+
+    Sorted on the `date` string, which is ISO so it sorts correctly as text.
+    Anything missing a date sorts last rather than crashing the list.
+    """
+    if not os.path.exists(WRITING_DIR):
+        logger.warning("Writing directory %s does not exist", WRITING_DIR)
+        return []
+
+    entries: List[Dict[str, Any]] = []
+    for filename in sorted(os.listdir(WRITING_DIR)):
+        if not filename.endswith('.md'):
+            continue
+
+        content = read_markdown_file(os.path.join(WRITING_DIR, filename))
+        if not content:
+            continue
+
+        entry = parse_writing_metadata(content)
+        entry['slug'] = filename[:-3]
+        entry['content'] = content
+        entries.append(entry)
+
+    return sorted(entries, key=lambda e: e.get('date') or '', reverse=True)
+
+
+def get_writing_by_slug(slug: str) -> Optional[Dict[str, Any]]:
+    """One piece, or None. Slug is confined to the writing directory."""
+    root = os.path.realpath(WRITING_DIR)
+    path = os.path.realpath(os.path.join(root, f"{slug}.md"))
+
+    # The router already refuses a "/" inside a path parameter, but os.path.join
+    # honours an absolute path silently, so containment is asserted rather than
+    # assumed - the same guard /api/content/ uses.
+    if os.path.commonpath([root, path]) != root or not os.path.isfile(path):
+        return None
+
+    content = read_markdown_file(path)
+    if not content:
+        return None
+
+    entry = parse_writing_metadata(content)
+    entry['slug'] = slug
+    entry['content'] = content
+    return entry

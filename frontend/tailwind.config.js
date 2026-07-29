@@ -1,137 +1,84 @@
 /** @type {import('tailwindcss').Config} */
+
+/*
+ * An instrument palette, not a brand palette.
+ *
+ * The previous one was built around a purple->pink gradient, which is the most
+ * common signature on AI developer portfolios and read as templated before a
+ * word was. More importantly it spent colour on decoration, leaving nothing to
+ * spend on meaning.
+ *
+ * Here colour carries state and nothing else:
+ *   signal  - the assistant answered from the corpus
+ *   caution - the assistant declined; no source supported the question
+ *   danger  - something actually failed
+ * Everything else is a neutral on the ink scale. There are no gradients.
+ */
 module.exports = {
     content: ['./src/**/*.{js,jsx,ts,tsx}'],
     theme: {
         extend: {
             colors: {
-                // Dark theme colors
+                // Ground -> foreground. Blue-green cast rather than a pure grey,
+                // so the neutrals read as chosen against the signal green.
+                ink: {
+                    900: '#0B0F12', // page background
+                    800: '#111920', // panel, raised surface
+                    700: '#16202A', // input, message bubble
+                    600: '#1F2B34', // hairline
+                    500: '#2A3945', // hairline, emphasised
+                },
+                content: '#D9E1E6', // body text
+                muted: '#75868F', // secondary text, instrument labels
+
+                // State. Used on text and 1px rules only - never as a fill
+                // behind body copy, where none of them pass contrast.
+                signal: '#5FD3A0',
+                caution: '#E0A253',
+                danger: '#E4726A',
+
+                // Aliases kept so existing utility names resolve to the new
+                // palette instead of silently falling back to Tailwind defaults.
                 dark: {
-                    primary: '#0A0A0A', // Main background
-                    secondary: '#1E1E1E', // Container background
-                    tertiary: '#2A2A2A', // Message bubbles, hover states
-                    terminal: '#11111b', // Terminal background
+                    primary: '#0B0F12',
+                    secondary: '#111920',
+                    tertiary: '#16202A',
+                    terminal: '#0B0F12',
                 },
-                // Brand colors
-                brand: {
-                    purple: {
-                        light: '#b65eff',
-                        DEFAULT: '#9d4edd',
-                        dark: '#7b2cbf',
-                    },
-                    pink: {
-                        DEFAULT: '#ff7eee',
-                    },
-                },
-                // Status colors
-                status: {
-                    online: '#22C55E', // Green status
-                    error: '#EF4444', // Red status
-                    warning: '#F59E0B', // Yellow status
-                },
-                // Border colors
                 border: {
-                    DEFAULT: '#2a2b36',
-                    hover: '#374151', // gray-700
+                    DEFAULT: '#1F2B34',
+                    hover: '#2A3945',
                 },
-                // Gradient colors for consistent usage
-                gradient: {
-                    start: '#9d4edd', // Purple start
-                    middle: '#b65eff', // Purple middle
-                    end: '#ff7eee', // Pink end
-                },
-                // Background gradients
-                bg: {
-                    dark: {
-                        start: '#13141f',
-                        end: '#1a1b26',
-                    },
-                    card: {
-                        start: '#1c1d29',
-                        end: '#1c1d29', // With 80% opacity when needed
-                    },
-                },
-                blue: {
-                    400: '#60A5FA',
-                    500: '#3B82F6',
-                    600: '#2563EB',
-                },
-                pink: {
-                    400: '#F472B6',
-                    500: '#EC4899',
-                    600: '#DB2777',
+                status: {
+                    online: '#5FD3A0',
+                    error: '#E4726A',
+                    warning: '#E0A253',
                 },
             },
             fontFamily: {
-                sans: ['Inter', 'sans-serif'],
-                mono: ['Fira Code', 'monospace'],
+                // Serif for prose, mono for instrumentation. The split is
+                // semantic: serif is Yanir speaking, mono is the machine
+                // reporting on itself, so a reader can always tell which is which.
+                sans: ['Charter', 'Iowan Old Style', 'Georgia', 'serif'],
+                mono: ['SF Mono', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
             },
             keyframes: {
+                // The only motion left. `disco`, `float` and `bounce-gentle`
+                // animated decorative emoji that no longer exist.
                 fadeIn: {
-                    '0%': { opacity: '0', transform: 'translateY(10px)' },
+                    '0%': { opacity: '0', transform: 'translateY(4px)' },
                     '100%': { opacity: '1', transform: 'translateY(0)' },
                 },
-                disco: {
-                    '0%': {
-                        filter: 'hue-rotate(0deg) brightness(100%) saturate(100%)',
-                        transform: 'scale(1.1) rotate(12deg)',
-                        boxShadow: '0 0 20px rgba(157, 78, 221, 0.3)',
-                    },
-                    '25%': {
-                        filter: 'hue-rotate(90deg) brightness(130%) saturate(150%)',
-                        transform: 'scale(1.15) rotate(-8deg)',
-                        boxShadow: '0 0 35px rgba(182, 94, 255, 0.4)',
-                    },
-                    '50%': {
-                        filter: 'hue-rotate(180deg) brightness(150%) saturate(200%)',
-                        transform: 'scale(1.1) rotate(-12deg)',
-                        boxShadow: '0 0 50px rgba(157, 78, 221, 0.5)',
-                    },
-                    '75%': {
-                        filter: 'hue-rotate(270deg) brightness(130%) saturate(150%)',
-                        transform: 'scale(1.15) rotate(8deg)',
-                        boxShadow: '0 0 35px rgba(182, 94, 255, 0.4)',
-                    },
-                    '100%': {
-                        filter: 'hue-rotate(360deg) brightness(100%) saturate(100%)',
-                        transform: 'scale(1.1) rotate(12deg)',
-                        boxShadow: '0 0 20px rgba(157, 78, 221, 0.3)',
-                    },
-                },
-                float: {
-                    '0%, 100%': {
-                        transform: 'translateY(0) rotate(0deg)',
-                    },
-                    '50%': {
-                        transform: 'translateY(-3px) rotate(2deg)',
-                    },
-                },
-                pulse: {
-                    '0%, 100%': {
-                        opacity: 1,
-                        transform: 'scale(1)',
-                    },
-                    '50%': {
-                        opacity: 0.8,
-                        transform: 'scale(0.9)',
-                    },
-                },
-                'bounce-gentle': {
-                    '0%, 100%': {
-                        transform: 'translateY(-10%)',
-                        animationTimingFunction: 'cubic-bezier(0.8, 0, 1, 1)',
-                    },
-                    '50%': {
-                        transform: 'translateY(0)',
-                        animationTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)',
-                    },
+                // Shown while the model is generating. This one reports
+                // something true - a request is in flight - so it stays.
+                blink: {
+                    '0%, 80%, 100%': { opacity: '0.25' },
+                    '40%': { opacity: '1' },
                 },
             },
             animation: {
-                fadeIn: 'fadeIn 0.3s ease-out forwards',
-                disco: 'disco 3s ease-in-out infinite',
-                float: 'float 2s ease-in-out infinite',
-                pulse: 'pulse 2s ease-in-out infinite',
-                bounceGentle: 'bounce-gentle 2s infinite',
+                fadeIn: 'fadeIn 0.25s ease-out forwards',
+                blink: 'blink 1.4s ease-in-out infinite',
             },
         },
     },

@@ -1,113 +1,217 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router';
 import HamburgerMenu from '@/components/HamburgerMenu';
 import SocialLinks from '@/components/SocialLinks';
 import NavLinks from '@/components/NavLinks';
 
+/*
+ * The wordmark was a gradient that swapped hue on hover, next to a lightning
+ * bolt that faded in and rotated. Two animations and four colours on the one
+ * element whose job is to sit still and say whose site this is.
+ *
+ * It now has exactly one animation, and it carries information: on a narrow
+ * screen the name flies into the hamburger as you scroll down and comes back
+ * out when you scroll up, so the header quietly explains where the name went
+ * rather than just deleting it. The distance is measured from the two elements
+ * rather than guessed, so the name genuinely lands in the hamburger's mouth at
+ * any viewport width.
+ *
+ * Desktop keeps the name put: there is no hamburger above `lg`, so there would
+ * be nothing for it to fly into. The CSS neutralises the transform at that
+ * breakpoint, which is why the eaten state is a class rather than an inline
+ * style that would win over any media query.
+ */
+
+// Ignore sub-pixel scroll jitter, which would otherwise flip the state
+// continuously on a trackpad and leave the name flickering.
+const SCROLL_EPSILON = 4;
+
+// Below this the name is always out, so the top of a page never opens on a
+// half-eaten header.
+const SCROLL_REVEAL_ABOVE = 24;
+
+// Matches the chomp keyframes in index.css.
+const CHOMP_MS = 420;
+
 const NavBar: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const [scrolled, setScrolled] = useState(false);
+    const [isEaten, setIsEaten] = useState(false);
+    const [isChomping, setIsChomping] = useState(false);
 
-    // Handle navbar background on scroll
-    useEffect(() => {
-        const handleScroll = () => {
-            setScrolled(window.scrollY > 20);
-        };
-        window.addEventListener('scroll', handleScroll);
-        return () => window.removeEventListener('scroll', handleScroll);
+    const wordmarkRef = useRef<HTMLAnchorElement>(null);
+    const burgerRef = useRef<HTMLDivElement>(null);
+    const lastScrollY = useRef(0);
+    const chompTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // Mirrors `isEaten` so the scroll handler can see the previous value and
+    // fire the bite only on the change. Deriving it from an effect on `isEaten`
+    // instead would be a setState during render commit, which is both a lint
+    // error and an extra render for something the handler already knows.
+    const eatenRef = useRef(false);
+    // The scroll listener is bound once; a ref lets it read the menu's current
+    // state instead of the value captured when it was registered.
+    const isMenuOpenRef = useRef(false);
+
+    // Distance from the wordmark's right edge to the centre of the hamburger.
+    const [eatX, setEatX] = useState(0);
+
+    const measure = useCallback(() => {
+        const word = wordmarkRef.current?.getBoundingClientRect();
+        const burger = burgerRef.current?.getBoundingClientRect();
+        if (!word || !burger) return;
+        setEatX(burger.left + burger.width / 2 - word.right);
     }, []);
 
+    useEffect(() => {
+        measure();
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+    }, [measure]);
+
+    // The bite fires on the transition into `eaten`, not for as long as the name
+    // is gone, so the hamburger snaps shut once rather than chewing forever.
+    const setEaten = useCallback((next: boolean) => {
+        if (eatenRef.current === next) return;
+        eatenRef.current = next;
+        setIsEaten(next);
+
+        if (!next) return;
+        if (chompTimer.current) clearTimeout(chompTimer.current);
+        setIsChomping(true);
+        chompTimer.current = setTimeout(() => setIsChomping(false), CHOMP_MS);
+    }, []);
+
+    const closeMenu = useCallback(() => {
+        isMenuOpenRef.current = false;
+        setIsMenuOpen(false);
+    }, []);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            const y = window.scrollY;
+
+            // Scrolling with the menu open means the visitor has moved on from
+            // it, so it closes rather than sitting over content being read.
+            //
+            // This works only because the menu no longer locks body scroll. It
+            // used to add `overflow: hidden` to the body, which meant a scroll
+            // gesture with the menu open produced no scroll and therefore no
+            // event: the page refused to move and the panel stayed put, which
+            // is exactly the behaviour that felt broken. A scroll lock is for a
+            // full-screen overlay; this is a small dropdown, and letting the
+            // page move is both simpler and what a visitor expects.
+            if (isMenuOpenRef.current) {
+                closeMenu();
+                lastScrollY.current = y;
+                return;
+            }
+
+            if (y <= SCROLL_REVEAL_ABOVE) {
+                setEaten(false);
+            } else if (y > lastScrollY.current + SCROLL_EPSILON) {
+                setEaten(true);
+            } else if (y < lastScrollY.current - SCROLL_EPSILON) {
+                setEaten(false);
+            }
+
+            lastScrollY.current = y;
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [setEaten, closeMenu]);
+
+    useEffect(
+        () => () => {
+            if (chompTimer.current) clearTimeout(chompTimer.current);
+        },
+        []
+    );
+
     const toggleMenu = () => {
-        setIsMenuOpen(!isMenuOpen);
-        document.body.classList.toggle('menu-open');
+        setIsMenuOpen((open) => {
+            const next = !open;
+            isMenuOpenRef.current = next;
+            return next;
+        });
     };
 
-    const closeMenu = () => {
-        setIsMenuOpen(false);
-        document.body.classList.remove('menu-open');
-    };
+    // Swallowing the name while the menu is open would hide the way back home
+    // behind the very control the visitor is already using.
+    const hideWordmark = isEaten && !isMenuOpen;
 
     return (
         <>
-            {/* Spacer div - different height for mobile */}
-            <div
-                className={`h-16 lg:h-20 transition-all duration-300 ${isMenuOpen ? 'mb-[280px]' : ''}`}
-            ></div>
+            {/* Spacer matching the fixed bar's height. */}
+            <div className="h-16 lg:h-20" />
 
-            <nav
-                className={`
-                fixed top-0 left-0 right-0 z-50 font-sans
-                transition-all duration-300 ease-in-out
-                ${
-                    scrolled
-                        ? 'border-b shadow-lg backdrop-blur-md bg-gray-900/80 border-purple-500/10'
-                        : 'bg-transparent backdrop-blur-sm'
-                }
-            `}
-            >
+            {/* The page background, not a surface of its own.
+                A scrolled state used to add `bg-ink-900/85`, a bottom border and
+                a backdrop blur, which drew a lighter band with a hairline under
+                it across the top of every page.
+
+                Taking the exact page colour removed the band, but a bar that
+                stays put is still a bar. Hiding the whole header on scroll was
+                worse again - it took the only way into the menu with it, and
+                scrolling with no navigation anywhere reads as broken rather than
+                as clean.
+
+                So below `lg` there is no bar at all: the header is transparent
+                and its two controls carry their own small backgrounds, floating
+                over the page. Nothing spans the width, so there is no row to
+                feel sticky, and the hamburger never leaves. Above `lg` the bar
+                stays opaque, because the nav links and social icons do span the
+                width and would otherwise sit on top of the text. */}
+            <header className="fixed top-0 right-0 left-0 z-50 lg:bg-ink-900">
                 <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16 lg:h-20">
-                        <div className="flex items-center">
-                            <a
-                                href="/"
-                                className="flex items-center space-x-2 transition-all duration-300 group hover:scale-105"
-                                aria-label="Home"
-                            >
-                                <span className="relative font-mono text-2xl font-bold lg:text-3xl">
-                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600 transition-all duration-300 group-hover:from-cyan-500 group-hover:to-blue-500">
-                                        Yanir.dev
-                                    </span>
-                                    <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-purple-400 to-pink-600 group-hover:w-full transition-all duration-300"></span>
-                                </span>
-                                <span className="text-xl opacity-0 transition-all duration-300 transform lg:text-2xl group-hover:opacity-100 group-hover:rotate-12 group-hover:translate-x-1">
-                                    ⚡
-                                </span>
-                            </a>
+                        <Link
+                            ref={wordmarkRef}
+                            to="/"
+                            // The chip is what lets the bar behind it disappear:
+                            // without a background of its own the name would sit
+                            // directly on whatever text is scrolling past.
+                            className={`wordmark rounded bg-ink-900/90 px-2 py-1 font-mono text-base tracking-tight backdrop-blur-sm text-content hover:text-signal lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none ${
+                                hideWordmark ? 'is-eaten' : ''
+                            }`}
+                            style={{ '--eat-x': `${eatX}px` } as React.CSSProperties}
+                            aria-label="Home"
+                            // Hidden from assistive tech and from tab order only
+                            // while it is off screen; the nav below still links home.
+                            aria-hidden={hideWordmark}
+                            tabIndex={hideWordmark ? -1 : undefined}
+                        >
+                            Yanir Rot
+                        </Link>
+
+                        <div className="hidden gap-8 items-center lg:flex">
+                            <NavLinks />
+                            <div className="w-px h-4 bg-border" aria-hidden="true" />
+                            <SocialLinks className="flex gap-5 items-center" />
                         </div>
 
-                        {/* Desktop Navigation */}
-                        <div className="hidden items-center lg:flex">
-                            <div className="flex items-center space-x-8">
-                                <NavLinks />
-                                <div className="w-px h-6 bg-gradient-to-b from-transparent to-transparent via-purple-500/20"></div>
-                                <SocialLinks className="flex items-center space-x-6" />
-                            </div>
+                        <div ref={burgerRef} className="lg:hidden">
+                            <HamburgerMenu
+                                isOpen={isMenuOpen}
+                                onClick={toggleMenu}
+                                isChomping={isChomping && !isMenuOpen}
+                            />
                         </div>
-
-                        {/* Mobile menu button */}
-                        <HamburgerMenu isOpen={isMenuOpen} onClick={toggleMenu} />
                     </div>
                 </div>
 
                 <div
-                    className={`
-                        lg:hidden absolute top-16 left-0 right-0
-                        transform transition-all duration-300 ease-in-out bg-gray-900/95 backdrop-blur-md
-                        ${isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}
-                    `}
+                    id="mobile-menu"
+                    className={`lg:hidden absolute inset-x-0 top-16 border-y bg-ink-900/97 border-border backdrop-blur-md transition-opacity duration-200 ${
+                        isMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                    }`}
+                    hidden={!isMenuOpen}
                 >
-                    <div className="px-2 pt-2 pb-3 space-y-1 border-t shadow-lg border-purple-500/10">
-                        <div className="p-3 mx-2 mb-4 rounded-xl border shadow-lg backdrop-blur-sm transition-all duration-300 bg-gray-800/50 border-purple-500/10 hover:bg-gray-800/60">
-                            <div className="flex items-center mb-3 space-x-2">
-                                <div className="flex space-x-1.5">
-                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-error/90 shadow-red-500/20"></div>
-                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-warning/90 shadow-yellow-500/20"></div>
-                                    <div className="w-3 h-3 rounded-full shadow-lg bg-status-online/90 shadow-green-500/20"></div>
-                                </div>
-                                <span className="ml-2 font-mono text-sm text-gray-400">
-                                    ~/navigation
-                                </span>
-                            </div>
-                            <div className="transform transition-all duration-300 hover:scale-[1.01]">
-                                <NavLinks isMobile onNavigate={closeMenu} />
-                            </div>
-                        </div>
-
-                        <div className="px-4 py-3 mx-2 mb-2 rounded-lg backdrop-blur-sm bg-gray-800/30">
-                            <SocialLinks className="flex justify-center space-x-4" />
-                        </div>
+                    <NavLinks isMobile onNavigate={closeMenu} />
+                    <div className="px-4 py-4 border-t border-border">
+                        <SocialLinks className="flex gap-5 items-center" />
                     </div>
                 </div>
-            </nav>
+            </header>
         </>
     );
 };

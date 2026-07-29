@@ -4,3 +4,9 @@ __pycache__
 .env.*
 venv/
 .git/ 
+# Test and evaluation assets: not needed to serve traffic, so they stay out of
+# the runtime image.
+tests/
+evals/
+pytest.ini
+requirements-dev.txt

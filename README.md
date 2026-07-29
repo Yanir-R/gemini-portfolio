@@ -86,7 +86,7 @@ FRONTEND_PROD_URL=https://your-frontend.example
 
 ### Rate limiting
 
-`/chat-with-files`, `/generate-text` and `/api/contact` are unauthenticated and cost money or quota per call, so both a per-client and a global window are enforced. Defaults:
+`/chat-with-files` and `/api/contact` are unauthenticated and cost money or quota per call, so both a per-client and a global window are enforced. Defaults:
 
 ```bash
 RATE_LIMIT_CHAT_PER_IP_PER_MINUTE=10
@@ -133,23 +133,51 @@ There is deliberately **no `GCP_SA_KEY`**. Authentication uses Workload Identity
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /` · `GET /health` | Health check |
-| `GET /check-paths` | Document availability |
-| `GET /api/content/{file_name}` | Read a markdown doc (path-confined to the docs dir) |
+| `GET /api/chat/status` | Whether the chat has a corpus to answer from |
+| `GET /api/content/{file_name}` | Read a markdown doc (path-confined to the profile dir) |
 | `GET /api/projects` · `GET /api/projects/{slug}` | Project data |
-| `POST /generate-text` | Basic chat — rate limited |
 | `POST /chat-with-files` | Context-aware chat — rate limited |
 | `POST /api/contact` | Contact email — rate limited |
 
-## Documentation system
+## The context layer
+
+What the chat knows about Yanir, and how it is allowed to answer, lives in three files:
+
+| File | Responsibility |
+| --- | --- |
+| `backend/docs/profile/` | The source content — published, see the note below |
+| `backend/context.py` | Assembles and caches the corpus; reports its token cost |
+| `backend/prompt.py` | The behavioural contract: grounding, voice, boundaries |
+
+The corpus is small (~3.6k tokens), so all of it is sent on every request and cached
+against file mtimes rather than re-read per call. `context.py` logs the token estimate
+on load and warns past a review threshold — the point at which selecting sections per
+question would start to be worth building.
+
+**Grounding is the reason the prompt layer exists.** The chat answers in Yanir's first
+person on a page recruiters read, so an invented employer or date is a false claim
+attributed to a real person. The model is instructed to answer only from the profile,
+to decline and offer email follow-up when a question is not covered, and to treat both
+the corpus and visitor messages as data rather than instructions.
 
 ```
 backend/docs/
-├── private/     # markdown the assistant reads (see note below)
-├── projects/    # per-project markdown, drives /api/projects
-└── templates/
+├── profile/     # markdown the chat answers from — published
+├── projects/    # per-project markdown, drives /api/projects and the chat
+└── templates/   # placeholders for forks; never sent to the model
 ```
 
-> **Note:** despite the directory name, `backend/docs/private/` is **tracked in this public repository**. Anything placed there is world-readable on GitHub and served over `/api/content/`. Do not put anything there you would not publish.
+> **Note:** `backend/docs/profile/` is **tracked in this public repository** and served
+> over `/api/content/`. Everything in it is world-readable on GitHub and reaches the
+> Gemini API on every chat message. Treat it as published: it is for what belongs on a
+> public portfolio, and nothing else.
+
+### Changing what the chat says
+
+Prompt and profile changes are validated against a golden question set — grounded answers,
+questions the corpus does not cover, false premises, injection and extraction — which is
+kept outside this repository and run by hand before shipping a change. `backend/tests/`
+covers what can be asserted offline and runs in CI on every pull request.
 
 ## Further reading
 

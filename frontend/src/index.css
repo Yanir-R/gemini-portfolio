@@ -2,53 +2,86 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Type is doing semantic work here, so the two families are not
+ * interchangeable: prose is set in a serif because it is Yanir talking, and
+ * anything the machine reports about itself - labels, counts, timings, source
+ * names - is set in mono. A reader can tell who is speaking without being told.
+ *
+ * Both stacks resolve locally on every target platform, so there is no webfont
+ * request and no invisible-text flash while one loads.
+ */
 @layer base {
     html {
-        font-family:
-            'Inter',
-            -apple-system,
-            BlinkMacSystemFont,
-            'Segoe UI',
-            Roboto,
-            sans-serif;
+        font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         scroll-behavior: smooth;
+
+        /*
+         * `clip`, not `hidden`, and no `width: 100vw`.
+         *
+         * Those two were a self-inflicted loop. `width: 100vw` includes the
+         * scrollbar's width, so the page was always slightly wider than the
+         * viewport; `overflow-x: hidden` was then added to hide the horizontal
+         * scrollbar that caused. But `overflow-x: hidden` forces the computed
+         * `overflow-y` to `auto`, which turned html *and* body into scroll
+         * containers - and once body scrolls internally, the window does not
+         * scroll at all. `window.scrollY` stayed 0 no matter how far down the
+         * page you were.
+         *
+         * That broke two things at once: a phone could not reach the bottom of
+         * the home page, and NavBar's scroll listener (on `window`) fired only
+         * intermittently, which is why the wordmark animation behaved
+         * differently on different pages.
+         *
+         * `overflow-x: clip` prevents horizontal scrolling without creating a
+         * scroll container, so `overflow-y` stays `visible` and the viewport
+         * does the scrolling, as it should.
+         */
+        overflow-x: clip;
     }
 
-    .font-mono {
-        font-family:
-            'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+    body {
+        @apply bg-ink-900 text-content;
+        overflow-x: clip;
+    }
+
+    /* Uppercase mono labels need tracking to stay readable at small sizes. */
+    .label {
+        @apply font-mono uppercase text-muted;
+        font-size: 0.72rem;
+        letter-spacing: 0.13em;
+    }
+
+    /* One visible focus treatment everywhere, rather than per-component rings
+       that some elements were missing entirely. */
+    :where(a, button, input, textarea, summary):focus-visible {
+        outline: 2px solid theme('colors.signal');
+        outline-offset: 2px;
+        border-radius: 2px;
     }
 }
 
-body {
-    @apply bg-dark-primary text-white;
-    overflow-x: hidden;
-}
-
-/* Custom scrollbar for the chat area */
+/* Scrollbars in the chat transcript. Thin and neutral - a scrollbar is
+   chrome, not content. */
 .overflow-y-auto::-webkit-scrollbar {
     width: 6px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-track {
-    @apply bg-dark-secondary;
+    @apply bg-ink-900;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-    @apply bg-dark-tertiary rounded-full;
+    @apply rounded-full bg-ink-600;
 }
 
-/* For Firefox */
 .overflow-y-auto {
     scrollbar-width: thin;
-    scrollbar-color: #2a2a2a #1e1e1e;
+    scrollbar-color: #1f2b34 #0b0f12;
 }
 
-/* Line clamp utility */
 .line-clamp-3 {
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -56,86 +89,136 @@ body {
     overflow: hidden;
 }
 
-/* Prevent input focus flash */
-input:focus {
-    @apply ring-2 ring-[#9d4edd] border-transparent;
-    outline: none;
-}
-
 input {
     @apply border-border;
-    transition: all 200ms ease-out;
+    transition:
+        border-color 160ms ease-out,
+        background-color 160ms ease-out;
 }
 
 .social-link {
-    @apply text-gray-300 transition-colors duration-200;
+    @apply text-muted transition-colors duration-200;
 }
 
 .social-link:hover {
     color: var(--hover-color);
 }
 
-/* prevent content jump when switching between scrollable and non-scrollable states */
-html {
-    width: 100vw;
-    overflow-x: hidden;
-}
-
 @layer utilities {
+    /* Nav underline. A 1px rule in the state colour, not a gradient sweep. */
     .nav-link {
-        @apply relative px-3 py-2 text-gray-300 hover:text-white transition-colors duration-200;
+        @apply relative px-3 py-2 text-muted transition-colors duration-200 hover:text-content;
     }
 
     .nav-link::after {
-        @apply content-[''] absolute left-0 -bottom-1 h-[2px] w-0 
-        bg-gradient-to-r from-purple-400 to-pink-600
-        transition-all duration-300;
+        @apply content-[''] absolute left-0 -bottom-1 h-px w-0 bg-signal transition-all duration-200;
     }
 
     .nav-link:hover::after {
         @apply w-full;
     }
 
-    /* Mobile-specific nav link styles */
     @media (max-width: 1024px) {
         .nav-link {
             @apply px-2 py-1.5 text-sm;
         }
-
-        .social-link {
-            @apply text-sm;
-        }
     }
 }
 
-/* smooth shadow transition for navbar */
-nav {
-    box-shadow: 0 0 0 0 rgba(147, 51, 234, 0);
+/*
+ * The wordmark being eaten by the hamburger.
+ *
+ * `--eat-x` is measured in NavBar from the wordmark's right edge to the centre
+ * of the hamburger, so the name lands in the mouth at any width instead of
+ * sliding a hardcoded distance and fading out somewhere near it.
+ *
+ * The two directions use different easing on purpose, because they are not the
+ * same event. Going in accelerates - it is being pulled. Coming out overshoots
+ * slightly and settles, which is what reads as being spat back.
+ */
+.wordmark {
+    transform-origin: right center;
     transition:
-        box-shadow 0.3s ease-in-out,
-        background-color 0.3s ease-in-out;
+        transform 380ms cubic-bezier(0.2, 1.35, 0.4, 1),
+        opacity 200ms ease-in 60ms;
 }
 
-nav.scrolled {
-    box-shadow: 0 4px 20px -1px rgba(147, 51, 234, 0.1);
+.wordmark.is-eaten {
+    transform: translateX(var(--eat-x, 6rem)) scale(0.12);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        transform 420ms cubic-bezier(0.6, 0.04, 0.98, 0.34),
+        opacity 220ms ease-out 180ms;
 }
 
-/* Prevent body scroll when mobile menu is open */
-body.menu-open {
-    overflow: hidden;
+/* The bite. Top and bottom bars snap together, the middle one narrows to a
+   gullet, then everything returns. */
+@keyframes chompTop {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    45% {
+        transform: translateY(5px);
+    }
 }
 
-/* Smooth transitions for mobile menu */
-.menu-open {
-    @apply overflow-hidden;
+@keyframes chompBottom {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    45% {
+        transform: translateY(-5px);
+    }
 }
 
-/* Ensure content transitions smoothly */
-main {
-    transition: transform 300ms ease-in-out;
+@keyframes chompMid {
+    0%,
+    100% {
+        transform: scaleX(1);
+        opacity: 1;
+    }
+    45% {
+        transform: scaleX(0.35);
+        opacity: 0.5;
+    }
 }
 
-/* prevent any potential layout shifts */
-.mobile-menu-spacer {
-    transition: margin 300ms ease-in-out;
+.is-chomping .chomp-top {
+    animation: chompTop 420ms cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+.is-chomping .chomp-bottom {
+    animation: chompBottom 420ms cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+.is-chomping .chomp-mid {
+    animation: chompMid 420ms cubic-bezier(0.3, 0, 0.2, 1);
+}
+
+/* Above `lg` there is no hamburger for the name to fly into, so the name stays
+   put. This has to override the eaten state, which is why that state is a class
+   and not an inline style. */
+@media (min-width: 1024px) {
+    .wordmark.is-eaten {
+        transform: none;
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+/* Anyone who has asked their OS to reduce motion gets no motion. The
+   generating indicator becomes static rather than disappearing, so the
+   "working" state stays legible. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
 }

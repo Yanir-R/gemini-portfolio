@@ -45,3 +45,15 @@ htmlcov/
 .cache
 coverage.xml
 *.cover
+# Chat evaluation harness. Deliberately unpublished: the golden questions encode
+# the ways this chat can be made to misbehave (injection probes, extraction
+# attempts, the claims it must refuse to invent), which is operational knowledge
+# rather than something the site benefits from shipping. The durable copy lives
+# in the private vault - see backend/README.md.
+evals/
+
+# Runtime record of addresses submitted through the contact flow. Written by
+# log_collected_email() into the working directory, so it appears in the repo
+# root on any local run. It contains third-party personal data and this
+# repository is public.
+collected_emails.json

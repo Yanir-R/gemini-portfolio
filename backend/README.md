@@ -7,18 +7,60 @@ FastAPI service on Google Cloud Run. Answers chat questions grounded in local ma
 ```
 backend/
 ├── docs/
-│   ├── private/       # markdown the assistant reads — see warning below
-│   ├── projects/      # per-project markdown, drives /api/projects
-│   └── templates/
+│   ├── profile/       # markdown the chat answers from — published, see warning
+│   ├── projects/      # per-project markdown, drives /api/projects and the chat
+│   └── templates/     # placeholders for forks; never sent to the model
 ├── main.py            # FastAPI app, routes, CORS
-├── gemini_helper.py   # Gemini integration, model fallback
+├── context.py         # assembles + caches the corpus, reports its token cost
+├── prompt.py          # the behavioural contract: grounding, voice, boundaries
+├── gemini_helper.py   # Gemini call, model fallback, failure copy
 ├── docs_helper.py     # markdown/PDF loading
 ├── rate_limit.py      # per-client + global rate limiting
+├── tests/             # offline regressions, run in CI
+├── evals/             # golden question set, run by hand
 ├── requirements.txt
 └── Dockerfile
 ```
 
-> **Warning:** `docs/private/` is **tracked in this public repository** despite its name. Anything in it is world-readable on GitHub and served over `/api/content/`. Do not put anything there you would not publish.
+> **Warning:** `docs/profile/` is **tracked in this public repository** and served over
+> `/api/content/`. Everything in it is world-readable on GitHub and is sent to the Gemini API
+> on every chat message. Treat it as published: it is for what belongs on a public portfolio,
+> and nothing else.
+
+## The context layer
+
+`context.py` and `prompt.py` split one question in two: *what may the chat know*, and *how
+may it answer*.
+
+**`context.py`** assembles the corpus from `docs/profile/` and `docs/projects/` and caches it
+against file mtimes, so the documents are parsed when they change rather than once per chat
+request. It logs the section count and token estimate on load, and warns past a threshold
+where sending everything on every request stops being obviously correct. At ~3.6k tokens
+against a context window in the hundreds of thousands, retrieval would be solving a problem
+this site does not have.
+
+An empty corpus is an error, not a fallback. `docs/templates/` holds placeholders for forks
+and is never sent to the model: a deploy with no profile documents makes the chat say it
+cannot reach its notes, rather than answering from `[brief story]` in a confident first person.
+
+**`prompt.py`** holds the system instruction — grounding, voice and boundaries. Grounding is
+the point of it: the chat answers in Yanir's first person on a page recruiters read, so an
+invented employer or date is a false claim attributed to a real person, not just a wrong
+answer. The model is told to answer only from the profile, to decline and offer email
+follow-up when a question is not covered, and to treat both the corpus and the visitor's
+messages as data rather than instructions.
+
+### Changing the prompt or the profile
+
+Both are validated against a golden question set — grounded answers, uncovered questions,
+false premises, injection and extraction — which is **kept outside this repository** and run
+by hand before shipping a change. `pytest` covers what can be asserted offline and does run
+in CI.
+
+> `max_output_tokens` is **not** a length control. On Gemini 3.x it is shared with the model's
+> internal thinking tokens, which are spent first, and a budget sized for a short answer is
+> consumed before the answer begins — producing a truncated reply on a successful-looking
+> response. Answer length is the prompt's job; see the comment in `gemini_helper.py`.
 
 ## Technical stack
 
@@ -76,13 +118,18 @@ Over-limit requests get **429** with a `Retry-After` header.
 | Endpoint | Notes |
 | --- | --- |
 | `GET /` · `GET /health` | Health check |
-| `GET /check-paths` | Document availability |
-| `GET /api/content/{file_name}` | Resolved and confined to the docs dir |
+| `GET /api/chat/status` | `{"knowledge_ready": bool}` — whether the chat has a corpus |
+| `GET /api/content/{file_name}` | Resolved and confined to the profile dir |
 | `GET /api/projects` | Listing (content stripped) |
 | `GET /api/projects/{slug}` | Single project |
-| `POST /generate-text` | Rate limited |
 | `POST /chat-with-files` | Rate limited |
 | `POST /api/contact` | Rate limited |
+
+Two endpoints were removed rather than fixed. `GET /check-paths` returned absolute server
+filesystem paths, the working directory and a listing of document filenames to any anonymous
+caller; the only thing any client ever read from it was one boolean, which `/api/chat/status`
+now returns. `POST /generate-text` called Gemini with no corpus at all — unauthenticated,
+ungrounded, and referenced by no client.
 
 Unexpected errors return an opaque `"Internal server error"`; details are logged server-side with a stack trace rather than reflected to the caller.
 

@@ -1,0 +1,4 @@
+# Test-only dependencies. Kept out of requirements.txt so they never ship in the
+# container image.
+-r requirements.txt
+pytest==9.1.1

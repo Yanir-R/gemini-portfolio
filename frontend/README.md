@@ -94,12 +94,16 @@ All calls go through `apiClient` (`src/api/client.ts`), which sets `baseURL` fro
 | Path | Used by |
 | --- | --- |
 | `/health` | — |
-| `/check-paths` | `chatService.checkFiles` |
+| `/api/chat/status` | `chatService.checkKnowledge` |
 | `/chat-with-files` | `chatService.sendMessage` |
 | `/api/content/{file}` | About page |
 | `/api/projects`, `/api/projects/{slug}` | `projectService` |
 
-The backend rate limits the chat and contact endpoints and returns **429** with a `Retry-After` header; `chatService` surfaces the message through its existing error path.
+The backend rate limits the chat and contact endpoints and returns **429** with a `Retry-After` header. `chatService` reads that header and tells the visitor how many seconds to wait — which requires the backend to list `Retry-After` in the CORS `expose_headers`, since cross-origin JavaScript cannot read a response header otherwise.
+
+A Gemini-side quota exhaustion is different: it arrives as a normal **200** carrying an in-voice apology as the assistant's reply, because it is not the visitor's request that failed.
+
+Message length (`maxLength=2000`) and history length (last 20 messages) are capped client-side to match the backend's limits, so a normal conversation never comes back as a 422 the visitor cannot act on.
 
 ## Contributing
 

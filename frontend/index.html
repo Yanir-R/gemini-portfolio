@@ -2,13 +2,16 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!-- viewport-fit=cover exposes the safe-area insets the chat reads. Zoom is
+             deliberately not disabled: the previous runtime override set
+             maximum-scale=1.0 and user-scalable=0, which blocks pinch zoom. -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-        <title>Yanir.dev</title>
-        <meta name="title" content="Yanir.dev" />
+        <title>Yanir Rot - Full-Stack AI Engineer</title>
+        <meta name="title" content="Yanir Rot - Full-Stack AI Engineer" />
         <meta
             name="description"
-            content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
+            content="Yanir Rot - full-stack engineer working on production LLM and multi-agent systems. Ask the assistant here about the work: it answers from what he has written down, and says so when that is not enough."
         />
 
         <!-- The site-URL placeholder below is substituted at build time from the
@@ -17,30 +20,110 @@
         <link rel="canonical" href="%VITE_SITE_URL%/" />
 
         <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Yanir Rot" />
+        <meta property="og:locale" content="en_US" />
         <meta property="og:url" content="%VITE_SITE_URL%/" />
-        <meta property="og:title" content="Yanir.dev" />
+        <meta property="og:title" content="Yanir Rot - Full-Stack AI Engineer" />
         <meta
             property="og:description"
-            content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
+            content="Yanir Rot - full-stack engineer working on production LLM and multi-agent systems. Ask the assistant here about the work: it answers from what he has written down, and says so when that is not enough."
         />
-        <!-- og:image / twitter:image are intentionally absent: there is no
-             preview asset yet, and advertising a URL that 404s renders an empty
-             card on most platforms. twitter:card is "summary" for the same
-             reason - "summary_large_image" reserves a large image area that
-             would stay blank.
+        <!-- LinkedIn treats og:image as required, not optional: without it the
+             Featured-section card renders blank and the link-preview fetch
+             reports no preview at all. The asset is public/og-image.png at
+             1200x630, which clears LinkedIn's 1200x627 minimum and its 5MB cap.
+             Regenerate it from tools/og-image.html - see that file's header.
 
-             To enable: add frontend/public/preview-image.jpg (1200x630), then
-             re-add og:image and twitter:image pointing at the site-URL
-             placeholder plus /preview-image.jpg, and switch the card type back
-             to summary_large_image. -->
+             The URL must be absolute; crawlers do not resolve relative paths
+             here, which is why it goes through the same build-time placeholder
+             as og:url rather than being written as "/og-image.png". -->
+        <meta property="og:image" content="%VITE_SITE_URL%/og-image.png" />
+        <meta property="og:image:type" content="image/png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta
+            property="og:image:alt"
+            content="Yanir Rot, full-stack AI engineer: I build AI products end to end, then make them trustworthy."
+        />
 
-        <meta property="twitter:card" content="summary" />
+        <meta property="twitter:card" content="summary_large_image" />
         <meta property="twitter:url" content="%VITE_SITE_URL%/" />
-        <meta property="twitter:title" content="Yanir.dev" />
+        <meta property="twitter:title" content="Yanir Rot - Full-Stack AI Engineer" />
         <meta
             property="twitter:description"
-            content="Full Stack Developer specializing in modern web technologies, AI integration, and innovative solutions. Expert in React, TypeScript, and AI-powered systems."
+            content="Yanir Rot - full-stack engineer working on production LLM and multi-agent systems. Ask the assistant here about the work: it answers from what he has written down, and says so when that is not enough."
         />
+        <meta property="twitter:image" content="%VITE_SITE_URL%/og-image.png" />
+
+        <!-- Structured data, and the only description of Yanir that a crawler
+             which does not run JavaScript will ever see.
+
+             That is not a hypothetical. This is a client-rendered SPA: every
+             route ships the same empty <div id="root">, and the page's real
+             prose is fetched from the backend after boot. Googlebot renders JS
+             and gets the whole site; the assistant crawlers - GPTBot,
+             ClaudeBot, PerplexityBot, OAI-SearchBot - largely do not, so
+             without this block they index a blank page and can answer nothing
+             about him. Everything below is therefore stated here rather than
+             left to the app to render.
+
+             Keep it to claims the site itself makes. sameAs is for profiles
+             whose identity is verifiable by following the link, which is what
+             lets a search engine reconcile this page with the GitHub and
+             LinkedIn accounts and treat them as one person - the entire
+             mechanism by which a search for a name reaches this site. -->
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@graph": [
+                    {
+                        "@type": "Person",
+                        "@id": "%VITE_SITE_URL%/#person",
+                        "name": "Yanir Rot",
+                        "url": "%VITE_SITE_URL%/",
+                        "image": "%VITE_SITE_URL%/og-image.png",
+                        "jobTitle": "Full-Stack AI Engineer",
+                        "email": "mailto:rotyanir@gmail.com",
+                        "description": "Full-stack engineer working on the half of AI engineering that starts after the demo works: multi-agent systems for production incident investigation, grounding and citation correctness, context compaction and token cost. Previously seven years of frontend and full-stack work, including a sports betting platform at 500K daily users and finance applications for Israeli enterprises.",
+                        "knowsAbout": [
+                            "Multi-agent AI systems",
+                            "Large language model applications",
+                            "Retrieval-augmented generation",
+                            "Grounding and citation correctness",
+                            "React",
+                            "TypeScript",
+                            "Python",
+                            "FastAPI",
+                            "Kubernetes",
+                            "AWS",
+                            "Observability"
+                        ],
+                        "sameAs": [
+                            "https://github.com/Yanir-R",
+                            "https://www.linkedin.com/in/yanirrot/"
+                        ]
+                    },
+                    {
+                        "@type": "WebSite",
+                        "@id": "%VITE_SITE_URL%/#website",
+                        "url": "%VITE_SITE_URL%/",
+                        "name": "Yanir Rot - Full-Stack AI Engineer",
+                        "description": "Portfolio and AI assistant for Yanir Rot. The assistant answers questions about his work from his own notes and project write-ups, and declines when they do not cover the question.",
+                        "inLanguage": "en",
+                        "author": { "@id": "%VITE_SITE_URL%/#person" },
+                        "publisher": { "@id": "%VITE_SITE_URL%/#person" }
+                    },
+                    {
+                        "@type": "ProfilePage",
+                        "@id": "%VITE_SITE_URL%/#profilepage",
+                        "url": "%VITE_SITE_URL%/",
+                        "isPartOf": { "@id": "%VITE_SITE_URL%/#website" },
+                        "about": { "@id": "%VITE_SITE_URL%/#person" },
+                        "name": "Yanir Rot - Full-Stack AI Engineer"
+                    }
+                ]
+            }
+        </script>
     </head>
     <body>
         <div id="root"></div>

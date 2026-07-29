@@ -1,10 +1,15 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router';
 
-interface NavLink {
+/*
+ * Nav items carried an emoji each (a person, a rocket, a memo). They were the
+ * loudest thing in the header and encoded nothing the word beside them did not
+ * already say. The active state now does the only job an indicator has here -
+ * showing where you are - with a 1px rule in the state colour.
+ */
+interface NavLinkItem {
     href: string;
     label: string;
-    icon: string;
 }
 
 interface NavLinksProps {
@@ -12,6 +17,12 @@ interface NavLinksProps {
     className?: string;
     onNavigate?: () => void;
 }
+
+const LINKS: NavLinkItem[] = [
+    { href: '/about', label: 'About' },
+    { href: '/projects', label: 'Work' },
+    { href: '/blog', label: 'Writing' },
+];
 
 const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = '', onNavigate }) => {
     const location = useLocation();
@@ -23,59 +34,48 @@ const NavLinks: React.FC<NavLinksProps> = ({ isMobile = false, className = '', o
         }
     };
 
-    const links: NavLink[] = [
-        { href: '/about', label: 'About Me', icon: '🤵🏼' },
-        { href: '/projects', label: 'Projects', icon: '🚀' },
-        { href: '/blog', label: 'Blog', icon: '📝' },
-    ];
-
     const baseStyles = isMobile
-        ? 'block w-full px-4 py-3 text-lg font-medium text-gray-300 transition-all duration-300 bg-dark-secondary hover:bg-[#2a2a2a] rounded-lg border border-transparent hover:border-border-hover'
-        : 'relative text-base text-gray-300 transition-all duration-300 hover:text-white';
+        ? 'block w-full px-4 py-3 font-mono text-sm tracking-wide text-muted transition-colors duration-200 border-b border-border last:border-b-0 hover:text-content'
+        : 'relative font-mono text-xs uppercase tracking-[0.13em] text-muted transition-colors duration-200 hover:text-content';
 
-    const underlineStyles = !isMobile
-        ? "before:content-[''] before:absolute before:w-0 before:h-[2px] before:bottom-[-4px] before:left-0 before:transition-all before:duration-300 hover:before:w-full before:bg-gradient-to-r before:from-purple-400 before:to-pink-600 hover:before:bg-gradient-to-r hover:before:from-cyan-500 hover:before:to-blue-500"
+    const underline = !isMobile
+        ? "after:content-[''] after:absolute after:left-0 after:-bottom-1.5 after:h-px after:w-0 after:bg-signal after:transition-all after:duration-200 hover:after:w-full"
         : '';
 
     return (
-        <div
-            className={`${isMobile ? 'p-4 space-y-3' : 'flex space-x-8 text-base font-medium'} ${className}`}
+        <nav
+            className={`${isMobile ? 'flex flex-col' : 'flex items-center gap-7'} ${className}`}
+            aria-label="Primary"
         >
             {isMobile && !isHomePage && (
-                <NavLink
-                    to="/"
-                    onClick={handleNavClick}
-                    className={`flex items-center bg-gradient-to-r ${baseStyles} border-purple-500/20 from-purple-500/10 to-pink-500/10`}
-                >
-                    <span className="mr-2 text-xl text-purple-400">←</span>
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-                        cd ~/home
+                <NavLink to="/" onClick={handleNavClick} className={baseStyles}>
+                    <span aria-hidden="true" className="mr-2">
+                        ←
                     </span>
+                    Home
                 </NavLink>
             )}
 
-            {links.map((link) => (
+            {LINKS.map((link) => (
                 <NavLink
                     key={link.href}
                     to={link.href}
                     onClick={handleNavClick}
-                    className={({ isActive }) => `
-                        ${baseStyles}
-                        ${underlineStyles}
-                        ${isActive && !isMobile ? 'text-white before:w-full before:bg-[#ff7eee]' : ''}
-                        ${isActive && isMobile ? 'bg-[#2a2a2a] border-gray-700 text-white' : ''}
-                        ${isMobile ? 'flex items-center' : ''}
-                    `}
+                    className={({ isActive }) =>
+                        [
+                            baseStyles,
+                            underline,
+                            isActive && !isMobile ? 'text-signal after:w-full' : '',
+                            isActive && isMobile ? 'text-content' : '',
+                        ]
+                            .filter(Boolean)
+                            .join(' ')
+                    }
                 >
-                    {isMobile ? (
-                        <span className="mr-2 text-xl text-purple-400">→</span>
-                    ) : (
-                        <span className="mr-2 text-lg">{link.icon}</span>
-                    )}
                     {link.label}
                 </NavLink>
             ))}
-        </div>
+        </nav>
     );
 };
 
