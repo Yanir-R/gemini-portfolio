@@ -182,9 +182,11 @@ class ChatRequest(BaseModel):
     collected_email: Optional[EmailStr] = None
 
 class ContactRequest(BaseModel):
-    # EmailStr rather than str, matching the chat paths. This address is
-    # interpolated into an outbound email body, so it is validated at the schema
-    # and rejected with a 422 before any of that happens.
+    # EmailStr rather than str, matching the chat paths, and a length ceiling on
+    # the message. Both are declared here rather than checked in the handler so
+    # a malformed request is answered 422 before it reaches one - which also
+    # means it never spends a rate-limit slot, since FastAPI validates the body
+    # before the endpoint runs.
     email: EmailStr
     message: str = Field(max_length=MAX_MESSAGE_CHARS)
 

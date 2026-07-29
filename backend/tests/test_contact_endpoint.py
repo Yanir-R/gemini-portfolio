@@ -45,3 +45,19 @@ def test_an_oversized_message_is_refused(client, monkeypatch):
     )
 
     assert response.status_code == 422
+
+
+def test_a_rejected_request_does_not_spend_a_rate_limit_slot(client, monkeypatch):
+    """Validation runs before the endpoint, so a malformed body costs nothing.
+
+    The limiter exists to protect a scarce resource. Letting requests that were
+    never going to be delivered consume it would let anyone exhaust the budget
+    with input that fails at the schema.
+    """
+    calls = []
+    monkeypatch.setattr(main, "enforce_rate_limit", lambda *a, **k: calls.append(a))
+
+    response = client.post("/api/contact", json={"email": "nope", "message": "hello"})
+
+    assert response.status_code == 422
+    assert calls == []

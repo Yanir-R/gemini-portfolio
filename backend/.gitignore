@@ -52,8 +52,7 @@ coverage.xml
 # in the private vault - see backend/README.md.
 evals/
 
-# Runtime record of addresses submitted through the contact flow. Written by
-# log_collected_email() into the working directory, so it appears in the repo
-# root on any local run. It contains third-party personal data and this
-# repository is public.
+# Addresses submitted through the contact flow are emailed and not persisted,
+# so nothing writes this file. The rule stays because a copy left by an earlier
+# run holds third-party personal data and this repository is public.
 collected_emails.json

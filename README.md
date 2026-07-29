@@ -110,11 +110,14 @@ call to the `run.app` URL. Leave it unset for local development.
 `/chat-with-files` and `/api/contact` are unauthenticated and cost money or quota per call, so both a per-client and a global window are enforced. Defaults:
 
 ```bash
-RATE_LIMIT_CHAT_PER_IP_PER_MINUTE=10
-RATE_LIMIT_CHAT_GLOBAL_PER_MINUTE=40
+RATE_LIMIT_CHAT_PER_IP_PER_DAY=10
+RATE_LIMIT_CHAT_GLOBAL_PER_DAY=12
+RATE_LIMIT_CHAT_WINDOW_SECONDS=86400
 RATE_LIMIT_CONTACT_PER_IP_PER_MINUTE=3
 RATE_LIMIT_CONTACT_GLOBAL_PER_MINUTE=15
 ```
+
+The two limiters use different windows because they answer different questions. Contact is a rate — how often may somebody send. Chat is a budget: Gemini's free tier grants 20 requests per **day** per model, so a per-minute window would renew 1,440 times a day and cap nothing that matters.
 
 The global window is the cost guard: a per-IP limit alone is defeated by spoofing or a botnet. See `backend/rate_limit.py`.
 
@@ -190,6 +193,7 @@ the corpus and visitor messages as data rather than instructions.
 backend/docs/
 ├── profile/     # markdown the chat answers from — published
 ├── projects/    # per-project markdown, drives /api/projects and the chat
+├── writing/     # published articles, drives /api/writing and the chat
 └── templates/   # placeholders for forks; never sent to the model
 ```
 

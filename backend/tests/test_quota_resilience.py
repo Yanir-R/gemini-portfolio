@@ -78,9 +78,13 @@ def test_404_does_not_put_a_model_on_cooldown(stub_gemini, stub_knowledge):
 
 
 def test_cooldowns_do_not_leak_into_the_next_test():
-    # The 429 tests above leave every model cooling. Without the autouse reset
-    # in conftest.py, whatever runs next inherits a chain where nothing is
-    # callable and answers BUSY_MESSAGE for reasons of its own file's making.
+    # Guards the autouse reset in conftest.py rather than any behaviour of its
+    # own: the 429 tests above put every model on cooldown, so deleting that
+    # fixture makes this assertion fail. With the fixture in place it passes by
+    # construction, which is the point - the cost of keeping it is one cheap
+    # assertion, and what it catches is a whole file inheriting a chain where
+    # nothing is callable and answering BUSY_MESSAGE for reasons of its own
+    # file's making.
     assert gemini_helper._model_cooldowns == {}
 
 

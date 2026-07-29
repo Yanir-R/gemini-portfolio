@@ -179,7 +179,7 @@ jobs:
           # code execution inside it - the metadata server will mint a token for
           # whatever the service runs as, so an SSRF or RCE in the chat path
           # would have been enough to redeploy the service, push images, and
-          # read every secret in the project. GCP_RUNTIME_SA can read the two
+          # read every secret in the project. GCP_RUNTIME_SA can read the
           # secrets on the --set-secrets line and nothing else.
           #
           # It is a variable rather than a secret because a service account

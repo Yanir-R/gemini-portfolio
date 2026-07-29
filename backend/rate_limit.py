@@ -11,11 +11,11 @@ tier, spend real money). Two windows are enforced:
 
 State is per-process and in-memory, so the effective global ceiling is
 
-    GLOBAL_PER_MINUTE x processes-per-instance x max-instances
+    global_limit x processes-per-instance x max-instances
 
 Both deployment paths run a single process per instance (the workflow's
 generated Dockerfile and backend/Dockerfile both use plain uvicorn), and Cloud
-Run is capped at 4 instances, so the real ceiling is GLOBAL_PER_MINUTE x 4.
+Run is capped at 4 instances, so the chat ceiling is 12 x 4 = 48 answers a day.
 Switching to gunicorn with multiple workers would multiply it again - see the
 note in backend/Dockerfile.
 

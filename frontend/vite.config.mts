@@ -111,9 +111,10 @@ const TRAINING_CRAWLERS = [
  *                       data block rather than executable script - the HTML
  *                       parser never prepares it for execution, so CSP does not
  *                       gate it and the structured data survives this policy.
- *   style-src           'unsafe-inline' is required: three components set a
- *                       `style` attribute to pass a CSS custom property, and
- *                       style attributes are inline styles as far as CSP cares.
+ *   style-src           'unsafe-inline' is required because components set a
+ *                       `style` attribute - NavBar passes `--eat-x` that way,
+ *                       and a style attribute counts as an inline style as far
+ *                       as CSP is concerned.
  *   img-src             'self' data: https:. Broader than the rest of this
  *                       policy, and deliberately. Project and writing images
  *                       live in author-written markdown served from the backend
@@ -334,8 +335,9 @@ export default defineConfig(({ mode, command }) => {
     ).replace(/\/$/, '');
     const avatarUrl = env.VITE_AVATAR_URL || siteConfig.avatarUrl || '';
 
-    // Fail the build rather than emit a bundle wired to nothing. `verify` builds
-    // without secrets, so this is scoped to real builds only via `command`.
+    // Fail the build rather than emit a bundle wired to nothing. `command`
+    // narrows this to builds, so a dev server still starts on the development
+    // fallbacks.
     if (command === 'build' && isProd) {
         const missing = [!backendUrl && 'backendUrl', !siteUrl && 'url'].filter(Boolean);
         if (missing.length && process.env.VITE_ALLOW_UNCONFIGURED_BUILD !== 'true') {
