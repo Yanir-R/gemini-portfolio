@@ -202,3 +202,109 @@ def get_project_by_slug(slug: str) -> Optional[Dict[str, Any]]:
 def get_featured_projects() -> List[Dict[str, Any]]:
     """Get only featured projects"""
     return [p for p in get_all_projects() if p.get('featured', False)]
+
+
+# ---------------------------------------------------------------------------
+# Writing
+# ---------------------------------------------------------------------------
+#
+# Long-form pieces and short posts published elsewhere, republished here with a
+# link back to the original. They live in the same docs tree as the projects and
+# are assembled into the same corpus, so what a visitor reads and what the chat
+# can answer from stay the same bytes.
+
+WRITING_DIR = os.path.join(DOCS_DIR, "writing")
+
+# `media` is deliberately plural here, unlike a project's single screenshot: a
+# post often carries two or three images and they are part of the argument.
+WRITING_SECTIONS = ("kind", "source", "url", "date", "media", "summary", "related")
+
+# Sections that hold a list, one item per line, rather than a single value.
+WRITING_LIST_SECTIONS = ("media", "related")
+
+
+def _parse_sections(content: str, section_names: tuple) -> Dict[str, List[str]]:
+    """Collect the body lines under each recognised `## Section`.
+
+    Returns every section as a list of lines so a caller can decide whether a
+    section is single-valued. Parsing stops a section at the next heading of any
+    level, so prose headings inside the article body cannot leak into metadata.
+    """
+    collected: Dict[str, List[str]] = {}
+    current: Optional[str] = None
+
+    for raw in content.split('\n'):
+        line = raw.strip()
+
+        if line.startswith('#'):
+            heading = line.lstrip('#').strip().lower().replace(' ', '_')
+            current = heading if (line.startswith('## ') and heading in section_names) else None
+            continue
+
+        if current and line:
+            collected.setdefault(current, []).append(line)
+
+    return collected
+
+
+def parse_writing_metadata(content: str) -> Dict[str, Any]:
+    """Metadata for one piece of writing, plus its title."""
+    sections = _parse_sections(content, WRITING_SECTIONS)
+
+    metadata: Dict[str, Any] = {}
+    for name, lines in sections.items():
+        metadata[name] = lines if name in WRITING_LIST_SECTIONS else lines[0]
+
+    title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
+    if title_match:
+        metadata['title'] = title_match.group(1).strip()
+
+    return metadata
+
+
+def get_all_writing() -> List[Dict[str, Any]]:
+    """Every piece, newest first.
+
+    Sorted on the `date` string, which is ISO so it sorts correctly as text.
+    Anything missing a date sorts last rather than crashing the list.
+    """
+    if not os.path.exists(WRITING_DIR):
+        logger.warning("Writing directory %s does not exist", WRITING_DIR)
+        return []
+
+    entries: List[Dict[str, Any]] = []
+    for filename in sorted(os.listdir(WRITING_DIR)):
+        if not filename.endswith('.md'):
+            continue
+
+        content = read_markdown_file(os.path.join(WRITING_DIR, filename))
+        if not content:
+            continue
+
+        entry = parse_writing_metadata(content)
+        entry['slug'] = filename[:-3]
+        entry['content'] = content
+        entries.append(entry)
+
+    return sorted(entries, key=lambda e: e.get('date') or '', reverse=True)
+
+
+def get_writing_by_slug(slug: str) -> Optional[Dict[str, Any]]:
+    """One piece, or None. Slug is confined to the writing directory."""
+    root = os.path.realpath(WRITING_DIR)
+    path = os.path.realpath(os.path.join(root, f"{slug}.md"))
+
+    # The router already refuses a "/" inside a path parameter, but os.path.join
+    # honours an absolute path silently, so containment is asserted rather than
+    # assumed - the same guard /api/content/ uses.
+    if os.path.commonpath([root, path]) != root or not os.path.isfile(path):
+        return None
+
+    content = read_markdown_file(path)
+    if not content:
+        return None
+
+    entry = parse_writing_metadata(content)
+    entry['slug'] = slug
+    entry['content'] = content
+    return entry

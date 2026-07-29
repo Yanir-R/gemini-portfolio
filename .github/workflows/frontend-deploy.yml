@@ -100,6 +100,14 @@ jobs:
           # empty, so an unset SITE_URL variable breaks the deploy rather than
           # silently shipping a wrong canonical URL.
           VITE_SITE_URL: ${{ vars.SITE_URL }}
+          # Optional, and a variable rather than a secret: it is a public image
+          # URL, not a credential. The photograph is deliberately not committed
+          # - this repository is public and its history permanent - so
+          # production has to be told where it lives. Unset is a supported
+          # state: the avatar falls back to an initial-letter mark rather than
+          # breaking the build, which is why this is not in the required check
+          # above.
+          VITE_AVATAR_URL: ${{ vars.AVATAR_URL }}
         run: npm run build
 
       - name: Deploy to Cloudflare Pages

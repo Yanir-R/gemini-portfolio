@@ -5,7 +5,8 @@ from gemini_helper import get_gemini_response
 from context import get_knowledge
 from docs_helper import (
     read_markdown_file, PROFILE_DIR,
-    get_all_projects, get_project_by_slug, get_featured_projects
+    get_all_projects, get_project_by_slug, get_featured_projects,
+    get_all_writing, get_writing_by_slug
 )
 from rate_limit import chat_limiter, contact_limiter, enforce_rate_limit
 from pydantic import BaseModel, EmailStr, Field
@@ -461,6 +462,34 @@ async def contact(request: ContactRequest, http_request: Request = None):
 # said an address has no reason to sit in log storage; this contradicted it.
 
 # Project endpoints
+@app.get("/api/writing")
+async def list_writing():
+    """Published pieces, newest first.
+
+    Read-only and unauthenticated, like the project endpoints: everything it
+    returns is already public on the site it links back to.
+    """
+    try:
+        return {"writing": get_all_writing()}
+    except Exception:
+        logger.exception("Error listing writing")
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
+
+
+@app.get("/api/writing/{slug}")
+async def get_writing(slug: str):
+    try:
+        entry = get_writing_by_slug(slug)
+        if entry is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        return {"entry": entry}
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Error fetching writing %s", slug)
+        raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
+
+
 @app.get("/api/projects")
 async def get_projects(featured_only: bool = False):
     """Get all projects or only featured projects"""

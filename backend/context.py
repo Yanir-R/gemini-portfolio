@@ -30,7 +30,9 @@ from typing import List, Tuple
 from docs_helper import (
     PROFILE_DIR,
     PROJECTS_DIR,
+    WRITING_DIR,
     get_all_projects,
+    get_all_writing,
     read_markdown_file,
     read_pdf_file,
 )
@@ -63,7 +65,7 @@ class Knowledge:
 
 EMPTY = Knowledge(text="", sources=(), approx_tokens=0)
 
-_CONTENT_DIRS = (PROFILE_DIR, PROJECTS_DIR)
+_CONTENT_DIRS = (PROFILE_DIR, PROJECTS_DIR, WRITING_DIR)
 _READABLE_SUFFIXES = (".md", ".pdf")
 
 # (fingerprint, knowledge) of the last successful build.
@@ -127,8 +129,25 @@ def _project_sections() -> List[Tuple[str, str]]:
     return sections
 
 
+def _writing_sections() -> List[Tuple[str, str]]:
+    """Published writing, on the same terms as the project write-ups.
+
+    This is what makes the claim on the writing page true rather than
+    aspirational: a post is one document, rendered for a reader and given to the
+    model, so the two cannot drift. It also means the chat can answer "what have
+    you written about evals?" from the actual posts instead of declining.
+    """
+    sections: List[Tuple[str, str]] = []
+    for entry in get_all_writing():
+        body = (entry.get("content") or "").strip()
+        if body:
+            title = entry.get("title") or entry.get("slug") or "Untitled"
+            sections.append((f"Writing / {title}", body))
+    return sections
+
+
 def _build() -> Knowledge:
-    sections = _profile_sections() + _project_sections()
+    sections = _profile_sections() + _project_sections() + _writing_sections()
     if not sections:
         return EMPTY
 
