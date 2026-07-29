@@ -1,0 +1,35 @@
+{
+    // The API front door. See src/index.js for why it exists.
+    //
+    // Deploy from this directory:
+    //
+    //   npx wrangler secret put EDGE_SECRET     # once, and on rotation
+    //   npx wrangler deploy
+    //
+    // `custom_domain: true` makes Cloudflare create and manage the DNS record
+    // for api.yanirrot.com itself, so the hostname, the route and the record
+    // cannot drift apart the way they would if the record were added by hand.
+    "name": "yanirrot-api-edge",
+    "main": "src/index.js",
+    "compatibility_date": "2026-07-01",
+    "workers_dev": false,
+    "routes": [
+        {
+            "pattern": "api.yanirrot.com",
+            "custom_domain": true
+        }
+    ],
+    "vars": {
+        // Not a secret - it is a public URL, and anyone can find it. It is a
+        // var rather than a hardcoded string so a backend move is a config
+        // change rather than a code change.
+        "ORIGIN_URL": "https://backend-247733412075.me-west1.run.app"
+    },
+    "observability": {
+        "enabled": true
+    }
+    // EDGE_SECRET is deliberately absent. It is set with `wrangler secret put`
+    // and lives only in Cloudflare; a value committed here would be readable
+    // in this repository's history forever, which for a shared secret means it
+    // was never secret.
+}

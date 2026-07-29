@@ -8,29 +8,45 @@ interface MessageAvatarProps {
 }
 
 /*
- * Where Yanir's photograph comes from, in order:
+ * Where Yanir's photograph comes from:
  *
  *   1. VITE_AVATAR_URL  - production. Set in CI, pointing at the same external
  *                         host the project screenshots already use.
- *   2. /profile.jpeg    - local development. Present on Yanir's machine and
- *                         listed in .gitignore, so it never enters the public
- *                         repository or its permanent history.
- *   3. the letter mark  - the committed placeholder, and the reason a fresh
- *                         clone still renders correctly with no binary in the tree.
+ *   2. /profile.jpeg    - local development ONLY. Present on Yanir's machine
+ *                         and listed in .gitignore, so it never enters the
+ *                         public repository or its permanent history.
+ *   3. the letter mark  - whenever neither is available, and the reason a fresh
+ *                         clone renders correctly with no binary in the tree.
  *
- * Step 3 is not only a fallback for a missing file: `onError` also catches a
- * broken or blocked URL at runtime, so a dead image host degrades to a mark
- * rather than to the browser's grey broken-image icon.
+ * The dev-only guard on step 2 is load-bearing, not tidiness. Because the file
+ * is gitignored it does not exist in a CI build, and `_redirects` maps `/*` to
+ * index.html - so in production `/profile.jpeg` did not 404, it answered 200
+ * with a page of HTML. The browser took that as an image, failed to decode it,
+ * fired onError, and every re-render of the transcript tried again, which is
+ * what made the avatar flicker between a broken image and the letter mark
+ * several times a second. Asking for a file that cannot exist is the bug; the
+ * flicker was only the symptom.
+ *
+ * Step 3 also still catches a configured URL that breaks at runtime, so a dead
+ * image host degrades to a mark rather than the browser's grey broken-image
+ * icon.
  */
-const AVATAR_SRC = (import.meta.env.VITE_AVATAR_URL as string | undefined) || '/profile.jpeg';
+const CONFIGURED_AVATAR = import.meta.env.VITE_AVATAR_URL as string | undefined;
+const AVATAR_SRC = CONFIGURED_AVATAR || (import.meta.env.DEV ? '/profile.jpeg' : '');
+
+// Module scope on purpose. Each message renders its own avatar, so a per
+// component failure flag would let every one of them retry the same dead URL
+// and re-run the same failure. Recording it once means the first failure
+// settles it for the whole transcript, and for every message that arrives after.
+let avatarKnownBroken = false;
 
 // Only the assistant speaks as Yanir, so only the assistant wears his face. A
 // photograph on the visitor's own messages would be claiming to be them.
 const PHOTO_TYPES = new Set(['ai', 'initial']);
 
 export const MessageAvatar: React.FC<MessageAvatarProps> = ({ type }) => {
-    const [photoFailed, setPhotoFailed] = React.useState(false);
-    const showPhoto = PHOTO_TYPES.has(type) && !photoFailed;
+    const [photoFailed, setPhotoFailed] = React.useState(avatarKnownBroken);
+    const showPhoto = Boolean(AVATAR_SRC) && PHOTO_TYPES.has(type) && !photoFailed;
 
     if (showPhoto) {
         return (
@@ -43,8 +59,16 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({ type }) => {
                 aria-hidden="true"
                 width={32}
                 height={32}
-                loading="lazy"
-                onError={() => setPhotoFailed(true)}
+                // Not lazy. This sits in the first screenful of every visit, so
+                // deferring it saves no bandwidth and delays the one image on
+                // the page. It also makes the avatar measurably slower to
+                // appear than the text beside it, which reads as a broken
+                // image rather than a pending one.
+                loading="eager"
+                onError={() => {
+                    avatarKnownBroken = true;
+                    setPhotoFailed(true);
+                }}
                 className="object-cover flex-shrink-0 w-8 h-8 rounded border border-border"
             />
         );

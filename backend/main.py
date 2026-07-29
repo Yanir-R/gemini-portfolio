@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from hmac import compare_digest
 from dotenv import load_dotenv
 from gemini_helper import get_gemini_response
 from context import get_knowledge
@@ -203,6 +205,65 @@ def _to_model_turns(history: Optional[List[ChatMessage]]) -> List[Dict[str, str]
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 app = FastAPI()
+
+# Shared secret proving a request arrived through Cloudflare rather than by
+# calling the run.app URL directly.
+#
+# CORS does not do this job and never did. It is enforced by browsers, on
+# browsers - curl, a script, or anything that simply omits an Origin header is
+# unaffected by it. So while the allowlist above stops another website's
+# JavaScript using this API, it does nothing about the case that actually
+# costs something: somebody pointing a loop at /chat-with-files and burning
+# the Gemini quota, or saturating the 40/minute global limiter so real
+# visitors get 429s.
+#
+# The edge injects this header on every request it forwards. The value has to
+# be unguessable, because any client can send an arbitrary header - the header
+# is not a secret channel, the VALUE is the secret. Cloudflare's own docs make
+# the same point about forwarded client-certificate headers.
+#
+# Unset means unenforced, deliberately. It lets the header be introduced at
+# the edge and the frontend be repointed before enforcement begins, so no
+# ordering of those deploys can strand the site talking to an API that has
+# started rejecting it. Setting the variable is the last step, not the first.
+ORIGIN_SHARED_SECRET = getenv("ORIGIN_SHARED_SECRET", "").strip()
+
+# Paths that must stay reachable without the header. Cloud Run's own health
+# probing and any uptime check call these, and they neither cost quota nor
+# disclose anything.
+_UNGUARDED_PATHS = frozenset({"/", "/health"})
+
+
+@app.middleware("http")
+async def require_edge_secret(request: Request, call_next):
+    # Whether this request is *proven* to have arrived through our Cloudflare
+    # Worker. Only a valid secret establishes that, so it starts false and is
+    # never assumed - when the secret is unset the API is reachable directly and
+    # nothing about the forwarding chain can be trusted.
+    #
+    # rate_limit.client_key reads this to decide whether CF-Connecting-IP is
+    # believable. That header is trivially forgeable by anyone talking to the
+    # origin, and worthless on its own; it is only meaningful once the request
+    # has proved it came through the edge that set it.
+    request.state.edge_verified = False
+
+    if ORIGIN_SHARED_SECRET and request.url.path not in _UNGUARDED_PATHS:
+        # Preflights never carry custom headers - the browser sends them to ask
+        # whether the real request may. Rejecting them here would break CORS
+        # for the legitimate frontend; the request that follows is still
+        # checked.
+        if request.method != "OPTIONS":
+            presented = request.headers.get("x-edge-auth", "")
+            # compare_digest rather than == so the comparison does not return
+            # early on the first differing byte.
+            if not compare_digest(presented, ORIGIN_SHARED_SECRET):
+                logger.warning(
+                    "Rejected request to %s without a valid edge secret", request.url.path
+                )
+                return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+            request.state.edge_verified = True
+    return await call_next(request)
+
 
 app.add_middleware(
     CORSMiddleware,
