@@ -2,23 +2,29 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { siteConfig } from './site.config';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Fallbacks for when no .env file or process env supplies the value.
+// Where the public build values come from, in order: an environment variable,
+// then site.config.ts, then a development-only fallback.
 //
-// The production entries are intentionally empty rather than a pinned host: CI
-// injects VITE_BACKEND_URL and VITE_SITE_URL, and a hardcoded default here was
-// previously the only reason production worked at all, which masked the fact
-// that the injected values were being dropped. An empty default makes a missing
-// variable fail visibly instead of silently shipping a stale host.
+// site.config.ts is the source of truth for production and CI passes nothing,
+// so what is committed is what ships. The environment override is for local
+// work and preview builds, where pointing at a different backend for an
+// afternoon should not be a commit.
+//
+// The production fallbacks stay empty on purpose. A hardcoded default here was
+// once the only reason production worked at all, which masked the fact that the
+// injected values were being dropped; an empty default makes a missing value
+// fail visibly instead of silently shipping a stale host. That guard still runs
+// below - site.config.ts satisfies it by stating a value, which is a different
+// thing from a default quietly standing in for one.
 const DEFAULT_BACKEND_URL = {
     production: '',
     development: 'http://localhost:8000',
 } as const;
 
-// Public origin for canonical/OpenGraph URLs. Never hardcode a domain here -
-// social cards must not point at a host this project does not control.
 const DEFAULT_SITE_URL = {
     production: '',
     development: 'http://localhost:3000',
@@ -157,7 +163,7 @@ const TRAINING_CRAWLERS = [
 const CF_ANALYTICS_SCRIPT = 'https://static.cloudflareinsights.com';
 const CF_ANALYTICS_REPORTING = 'https://cloudflareinsights.com';
 
-const emitSecurityHeaders = (backendUrl: string) => {
+const emitSecurityHeaders = (backendUrl: string, avatarUrl: string) => {
     const originOf = (u: string) => {
         try {
             return new URL(u).origin;
@@ -168,6 +174,9 @@ const emitSecurityHeaders = (backendUrl: string) => {
     const connectSrc = ["'self'", originOf(backendUrl), CF_ANALYTICS_REPORTING]
         .filter(Boolean)
         .join(' ');
+    // https: covers the author-written image hosts; the configured avatar origin
+    // is named too so it survives if that directive is ever tightened.
+    const imgSrc = ["'self'", 'data:', 'https:', originOf(avatarUrl)].filter(Boolean).join(' ');
 
     const csp = [
         "default-src 'self'",
@@ -178,7 +187,7 @@ const emitSecurityHeaders = (backendUrl: string) => {
         `script-src 'self' ${CF_ANALYTICS_SCRIPT}`,
         "style-src 'self' 'unsafe-inline'",
         "font-src 'self'",
-        "img-src 'self' data: https:",
+        `img-src ${imgSrc}`,
         `connect-src ${connectSrc}`,
         'upgrade-insecure-requests',
     ].join('; ');
@@ -196,7 +205,36 @@ const emitSecurityHeaders = (backendUrl: string) => {
     ].join('\n');
 };
 
-const emitDiscoveryFiles = (siteUrl: string, backendUrl: string) => ({
+/**
+ * What this deployment was actually built with, published at /build-info.json.
+ *
+ * Vite inlines the values above into the bundle, so from the outside there was
+ * no way to tell which ones a live deployment had used. Finding out meant
+ * grepping minified JavaScript, which is exactly what had to be done once when
+ * a config change and a deploy crossed over and the site quietly kept talking
+ * to the previous backend.
+ *
+ * Nothing here is a secret. The site URL is in every OpenGraph tag, the backend
+ * URL is in the bundle and the CSP, and the commit is public in a public
+ * repository - this only collects what is already visible into one place that
+ * answers the question directly.
+ */
+const emitBuildInfo = (siteUrl: string, backendUrl: string, avatarUrl: string) =>
+    JSON.stringify(
+        {
+            siteUrl,
+            backendUrl,
+            // Present in GitHub Actions; empty for a local build, which is
+            // itself worth knowing when reading this off a deployment.
+            commit: process.env.GITHUB_SHA || '',
+            builtAt: new Date().toISOString(),
+            avatarConfigured: Boolean(avatarUrl),
+        },
+        null,
+        2
+    ) + '\n';
+
+const emitDiscoveryFiles = (siteUrl: string, backendUrl: string, avatarUrl: string) => ({
     name: 'emit-discovery-files',
     generateBundle() {
         const robots = [
@@ -280,7 +318,8 @@ const emitDiscoveryFiles = (siteUrl: string, backendUrl: string) => ({
             ['robots.txt', robots],
             ['sitemap.xml', sitemap],
             ['llms.txt', llms],
-            ['_headers', emitSecurityHeaders(backendUrl)],
+            ['_headers', emitSecurityHeaders(backendUrl, avatarUrl)],
+            ['build-info.json', emitBuildInfo(siteUrl, backendUrl, avatarUrl)],
         ] as const) {
             this.emitFile({ type: 'asset', fileName, source });
         }
@@ -294,21 +333,23 @@ export default defineConfig(({ mode, command }) => {
     const isProd = mode === 'production';
     const backendUrl =
         env.VITE_BACKEND_URL ||
+        siteConfig.backendUrl ||
         (isProd ? DEFAULT_BACKEND_URL.production : DEFAULT_BACKEND_URL.development);
     const siteUrl = (
-        env.VITE_SITE_URL || (isProd ? DEFAULT_SITE_URL.production : DEFAULT_SITE_URL.development)
+        env.VITE_SITE_URL ||
+        siteConfig.url ||
+        (isProd ? DEFAULT_SITE_URL.production : DEFAULT_SITE_URL.development)
     ).replace(/\/$/, '');
+    const avatarUrl = env.VITE_AVATAR_URL || siteConfig.avatarUrl || '';
 
     // Fail the build rather than emit a bundle wired to nothing. `verify` builds
     // without secrets, so this is scoped to real builds only via `command`.
     if (command === 'build' && isProd) {
-        const missing = [!backendUrl && 'VITE_BACKEND_URL', !siteUrl && 'VITE_SITE_URL'].filter(
-            Boolean
-        );
+        const missing = [!backendUrl && 'backendUrl', !siteUrl && 'url'].filter(Boolean);
         if (missing.length && process.env.VITE_ALLOW_UNCONFIGURED_BUILD !== 'true') {
             throw new Error(
                 `Production build is missing ${missing.join(' and ')}. ` +
-                    'Set them in the environment, or set VITE_ALLOW_UNCONFIGURED_BUILD=true ' +
+                    'Set them in site.config.ts, or set VITE_ALLOW_UNCONFIGURED_BUILD=true ' +
                     'for a config-less build such as CI verification.'
             );
         }
@@ -335,7 +376,7 @@ export default defineConfig(({ mode, command }) => {
                     handler: (html: string) => html.replaceAll('%VITE_SITE_URL%', resolvedSiteUrl),
                 },
             },
-            emitDiscoveryFiles(resolvedSiteUrl, resolvedBackendUrl),
+            emitDiscoveryFiles(resolvedSiteUrl, resolvedBackendUrl, avatarUrl),
         ],
         server: {
             port: 3000,
@@ -355,8 +396,13 @@ export default defineConfig(({ mode, command }) => {
             include: ['react', 'react-dom', 'axios'],
         },
         envPrefix: 'VITE_',
+        // Both are defined explicitly rather than left to Vite's automatic
+        // VITE_ exposure, because their values now come from site.config.ts
+        // rather than from the environment - and automatic exposure only ever
+        // sees environment variables.
         define: {
             'import.meta.env.VITE_BACKEND_URL': JSON.stringify(resolvedBackendUrl),
+            'import.meta.env.VITE_AVATAR_URL': JSON.stringify(avatarUrl),
         },
     };
 });
