@@ -39,10 +39,30 @@ MODELS = (
 RETRYABLE_STATUS_CODES = frozenset({404, 429, 500, 502, 503, 504})
 
 # How long one upstream call may take before it is abandoned. The SDK counts in
-# milliseconds. Generous enough for a slow answer, short enough that three
-# sequential attempts cannot outlive a visitor's patience or Cloud Run's own
-# 300s request ceiling.
-REQUEST_TIMEOUT_MS = 20_000
+# milliseconds.
+#
+# Sized against a measurement, not a guess. A real answer on this deployment was
+# observed at 16.4 seconds end to end, so the first value here - 20 seconds -
+# left under four seconds of headroom and would have cut off legitimate replies
+# on a slower day. That is the worse failure: a hung call wastes a worker, but a
+# truncated good answer is a visitor being told the site is broken when it was
+# about to work.
+#
+# This is a ceiling on pathology, not a latency target. It only has to be low
+# enough that a wedged connection cannot hold a worker indefinitely.
+REQUEST_TIMEOUT_MS = 45_000
+
+# The visitor's ceiling, across the whole fallback chain.
+#
+# A per-call timeout alone is not enough: three models timing out in sequence is
+# three times the wait, and nobody watching a chat bubble waits that long. Once
+# this much time has gone, remaining models are skipped and the busy reply is
+# returned - the answer is not coming, and saying so is better than continuing
+# to spend the visitor's patience on it.
+#
+# The frontend sets no timeout of its own, so this is the only bound a visitor
+# actually experiences. It sits well under Cloud Run's 300s request ceiling.
+TOTAL_DEADLINE_SECONDS = 70
 
 # How long a model is left alone after it refuses.
 #
@@ -167,12 +187,25 @@ def get_gemini_response(
 
     last_error: Optional[Exception] = None
     skipped_all = True
+    started = time.monotonic()
     for model_id in MODELS:
+        now = time.monotonic()
+
+        # Out of time for the visitor. Trying another model can only make the
+        # wait longer for an answer that is already late.
+        if now - started >= TOTAL_DEADLINE_SECONDS:
+            logger.warning(
+                "Giving up after %.1fs without an answer; %s and any models after it not tried",
+                now - started,
+                model_id,
+            )
+            break
+
         # A model that just refused is skipped without a call. Asking again
         # inside the cooldown buys nothing and costs the round-trip, which is
         # the whole reason an exhausted quota was able to queue requests up
         # behind it.
-        if _model_is_cooling(model_id, time.monotonic()):
+        if _model_is_cooling(model_id, now):
             logger.info("Skipping %s: still cooling down after a recent refusal", model_id)
             continue
 
