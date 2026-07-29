@@ -67,7 +67,75 @@ const ASSISTANT_CRAWLERS = [
  * crawlers read an unparseable robots.txt as "allow everything", but LinkedIn
  * and Facebook fetch it before reading the link-preview tags.
  */
-const emitDiscoveryFiles = (siteUrl: string) => ({
+/**
+ * The response headers Cloudflare Pages applies to every route, built here for
+ * the same reason as the files above: the Content-Security-Policy has to name
+ * the backend's origin in `connect-src`, and that origin is injected at build
+ * time. A committed static `_headers` could only hardcode it, and a CSP that
+ * disagrees with the deployed backend URL breaks every request the chat makes.
+ *
+ * Notes on the specific choices, since a CSP is easy to copy and hard to read:
+ *
+ *   script-src 'self'   No 'unsafe-inline'. The JSON-LD block in index.html is
+ *                       a data block, not executable script - the HTML parser
+ *                       never prepares it for execution, so CSP does not gate
+ *                       it and structured data survives the strict policy.
+ *   style-src           'unsafe-inline' is required: three components set a
+ *                       `style` attribute to pass a CSS custom property, and
+ *                       style attributes are inline styles as far as CSP cares.
+ *   img-src             'self' covers the avatar's committed fallback. When
+ *                       VITE_AVATAR_URL points at an external host, that host's
+ *                       origin is added rather than opening img-src to https:.
+ *   frame-ancestors     'none' stops the site being framed - clickjacking cover
+ *                       that X-Frame-Options duplicates for older agents.
+ *
+ * No Cross-Origin-Resource-Policy: it would restrict who may load og-image.png,
+ * and a link-preview card is precisely a cross-origin consumer of that file.
+ *
+ * HSTS carries includeSubDomains but deliberately not `preload`. Preloading is
+ * baked into browser binaries and takes months to reverse, so it should be a
+ * decision made once the domain's subdomain plans are settled, not a default
+ * inherited from a config file.
+ */
+const emitSecurityHeaders = (backendUrl: string, avatarUrl: string) => {
+    const originOf = (u: string) => {
+        try {
+            return new URL(u).origin;
+        } catch {
+            return '';
+        }
+    };
+    const connectSrc = ["'self'", originOf(backendUrl)].filter(Boolean).join(' ');
+    const imgSrc = ["'self'", 'data:', originOf(avatarUrl)].filter(Boolean).join(' ');
+
+    const csp = [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "object-src 'none'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self'",
+        `img-src ${imgSrc}`,
+        `connect-src ${connectSrc}`,
+        'upgrade-insecure-requests',
+    ].join('; ');
+
+    return [
+        '/*',
+        `  Content-Security-Policy: ${csp}`,
+        '  Strict-Transport-Security: max-age=31536000; includeSubDomains',
+        '  X-Content-Type-Options: nosniff',
+        '  X-Frame-Options: DENY',
+        '  Referrer-Policy: strict-origin-when-cross-origin',
+        '  Cross-Origin-Opener-Policy: same-origin',
+        '  Permissions-Policy: accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()',
+        '',
+    ].join('\n');
+};
+
+const emitDiscoveryFiles = (siteUrl: string, backendUrl: string, avatarUrl: string) => ({
     name: 'emit-discovery-files',
     generateBundle() {
         const robots = [
@@ -144,6 +212,7 @@ const emitDiscoveryFiles = (siteUrl: string) => ({
             ['robots.txt', robots],
             ['sitemap.xml', sitemap],
             ['llms.txt', llms],
+            ['_headers', emitSecurityHeaders(backendUrl, avatarUrl)],
         ] as const) {
             this.emitFile({ type: 'asset', fileName, source });
         }
@@ -198,7 +267,7 @@ export default defineConfig(({ mode, command }) => {
                     handler: (html: string) => html.replaceAll('%VITE_SITE_URL%', resolvedSiteUrl),
                 },
             },
-            emitDiscoveryFiles(resolvedSiteUrl),
+            emitDiscoveryFiles(resolvedSiteUrl, resolvedBackendUrl, env.VITE_AVATAR_URL || ''),
         ],
         server: {
             port: 3000,
