@@ -33,24 +33,57 @@ const DEFAULT_SITE_URL = {
 // following links instead.
 const STATIC_ROUTES = ['/', '/about', '/projects', '/blog'] as const;
 
-// Crawlers named individually in robots.txt. A blanket `User-agent: *` already
-// permits them, but two treat an explicit entry as the deciding signal:
-// Google-Extended governs whether Gemini and AI Overviews may use the page (it
-// is opt-out via robots and does not affect Search ranking either way), and
-// GPTBot governs ChatGPT's. The point of this site is that a person - or
-// something answering on their behalf - can find out what Yanir works on, so
-// blocking the crawlers that field that question would defeat it.
-const ASSISTANT_CRAWLERS = [
-    'GPTBot',
+// The AI crawlers split in two, because being read and being trained on are
+// different things and this site wants one without the other.
+//
+// ANSWER_TIME_CRAWLERS fetch a page in order to answer a question somebody is
+// asking right now, and cite it back. They are the entire reason the JSON-LD
+// and llms.txt exist: when a person asks an assistant who Yanir is, these are
+// what go and look.
+//
+// TRAINING_CRAWLERS collect pages into corpora that models are trained on.
+// Nothing about that helps a reader find him, and ingestion is irreversible.
+//
+// These lists are not a preference stated in a vacuum - they mirror what
+// Cloudflare actually enforces on the zone, where the AI Crawler category is
+// blocked at the network layer and the AI Search and AI Assistant categories
+// are not. A robots.txt that disagreed with that enforcement would be
+// published policy the site does not honour, which is worse than either
+// choice made honestly.
+//
+// Two entries are directives rather than fetchers: Google-Extended and
+// Applebot-Extended have no crawler of their own, they only govern whether
+// Gemini and Apple Intelligence may use the content. They sit on the training
+// side for consistency. That has a real cost - Google-Extended also gates
+// Gemini's grounding, so declining it means Gemini is less likely to cite the
+// site - and it is the one line here worth revisiting if being found through
+// Gemini specifically matters more than staying out of its training set.
+const ANSWER_TIME_CRAWLERS = [
     'OAI-SearchBot',
     'ChatGPT-User',
+    'Claude-SearchBot',
+    'PerplexityBot',
+    'Perplexity-User',
+    'DuckAssistBot',
+    'MistralAI-User',
+    'Applebot',
+    'Googlebot',
+    'Bingbot',
+] as const;
+
+const TRAINING_CRAWLERS = [
+    'GPTBot',
     'ClaudeBot',
+    'Claude-User',
     'anthropic-ai',
     'Claude-Web',
-    'PerplexityBot',
+    'CCBot',
+    'Bytespider',
+    'Amazonbot',
+    'Meta-ExternalAgent',
+    'Google-CloudVertexBot',
     'Google-Extended',
     'Applebot-Extended',
-    'Bingbot',
 ] as const;
 
 /**
@@ -139,12 +172,18 @@ const emitDiscoveryFiles = (siteUrl: string, backendUrl: string, avatarUrl: stri
     name: 'emit-discovery-files',
     generateBundle() {
         const robots = [
-            '# Everything here is public by design, so nothing is disallowed.',
+            '# Every page here is public, and the crawlers that answer questions on a',
+            "# reader's behalf are welcome. The ones that collect pages into training",
+            '# corpora are not, and Cloudflare enforces that on the zone as well - this',
+            '# file states the same policy rather than a more generous one.',
             '',
             'User-agent: *',
             'Allow: /',
             '',
-            ...ASSISTANT_CRAWLERS.flatMap((ua) => [`User-agent: ${ua}`, 'Allow: /', '']),
+            '# Fetch a page to answer a question someone is asking now.',
+            ...ANSWER_TIME_CRAWLERS.flatMap((ua) => [`User-agent: ${ua}`, 'Allow: /', '']),
+            '# Collect pages for model training.',
+            ...TRAINING_CRAWLERS.flatMap((ua) => [`User-agent: ${ua}`, 'Disallow: /', '']),
             `Sitemap: ${siteUrl}/sitemap.xml`,
             '',
         ].join('\n');
