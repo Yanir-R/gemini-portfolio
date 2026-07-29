@@ -11,6 +11,10 @@ interface QuickMessageButtonProps {
         isEmailRelated?: boolean
     ) => void;
     nextQuestions?: QuickMessageOption[];
+    // Carried from the question that defines it. Suggestions stop after a
+    // question that asks to make contact, because what follows is the email
+    // exchange rather than another branch of the ladder.
+    isEmailRelated?: boolean;
     disabled: boolean;
 }
 
@@ -20,16 +24,9 @@ const QuickMessageButton: React.FC<QuickMessageButtonProps> = ({
     message,
     onClick,
     nextQuestions,
+    isEmailRelated,
     disabled,
 }) => {
-    // The contact flow is opened by wording, not by a flag on the button: the
-    // backend decides from the same phrases, so matching them here keeps the two
-    // ends agreeing about which questions are a request to get in touch.
-    const isEmailRelated =
-        message.toLowerCase().includes('contact') ||
-        message.toLowerCase().includes('email') ||
-        message.toLowerCase().includes('newsletter');
-
     return (
         <button
             type="button"
@@ -95,6 +92,7 @@ export const QuickMessages: React.FC<QuickMessagesProps> = ({
                         description={question.description}
                         message={question.message}
                         nextQuestions={question.nextQuestions}
+                        isEmailRelated={question.isEmailRelated}
                         onClick={onMessageSelect}
                         disabled={isLoading}
                     />

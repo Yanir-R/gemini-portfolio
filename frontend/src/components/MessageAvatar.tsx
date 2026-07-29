@@ -9,21 +9,22 @@ interface MessageAvatarProps {
 /*
  * Where Yanir's photograph comes from:
  *
- *   1. VITE_AVATAR_URL  - production. Set in CI, pointing at the same external
- *                         host the project screenshots already use.
- *   2. /profile.jpeg    - local development ONLY. Present on Yanir's machine
- *                         and listed in .gitignore, so it never enters the
+ *   1. VITE_AVATAR_URL  - resolved from site.config.ts at build time, or from
+ *                         the environment when one is set. Points at the same
+ *                         external host the project screenshots use.
+ *   2. /profile.jpeg    - development builds only. The file is gitignored, so
+ *                         it exists on a developer machine and never enters the
  *                         public repository or its permanent history.
  *   3. the letter mark  - whenever neither is available, and the reason a fresh
  *                         clone renders correctly with no binary in the tree.
  *
- * The dev-only guard on step 2 is load-bearing, not tidiness. The file is
- * gitignored, so it does not exist in a CI build, and `_redirects` maps `/*` to
- * index.html - a production request for `/profile.jpeg` would not 404, it would
- * answer 200 with a page of HTML that the browser cannot decode. Every
- * re-render would ask again, so the avatar would flicker between a broken image
- * and the letter mark. Never asking for a file that cannot exist is what
- * prevents that.
+ * The dev-only guard on step 2 is load-bearing. Because the file is gitignored
+ * it is absent from any CI build, and `_redirects` maps `/*` to index.html, so
+ * a production request for `/profile.jpeg` answers 200 with a page of HTML
+ * rather than 404. The browser cannot decode that as an image and every
+ * re-render asks again, which shows as an avatar flickering between a broken
+ * image and the letter mark. Not asking for a file that cannot exist is what
+ * avoids it.
  *
  * Step 3 also catches a configured URL that breaks at runtime, so a dead image
  * host degrades to a mark rather than the browser's grey broken-image icon.

@@ -38,11 +38,16 @@ class ProjectService {
     }
 
     /**
-     * The stack a write-up declares, in the order the fields are listed here.
-     * A project that names nothing under these headings simply shows no chips.
+     * The stack a write-up declares, most recognisable first.
+     *
+     * The ordered fields lead because they are what identifies a project at a
+     * glance. Everything else the write-up declares follows in the order the
+     * document lists it, so a `- **Video Processing**: ...` line reaches the
+     * card without being added here first. A project that names nothing shows
+     * no chips.
      */
     getProjectTechStack(project: Project): string[] {
-        const techFields = [
+        const orderedFields = [
             'tech_frontend',
             'tech_backend',
             'tech_ai_ml',
@@ -52,9 +57,13 @@ class ProjectService {
             'tech_deployment',
         ];
 
+        const remainingFields = Object.keys(project)
+            .filter((key) => key.startsWith('tech_') && !orderedFields.includes(key))
+            .sort();
+
         const techStack: string[] = [];
 
-        techFields.forEach((field) => {
+        [...orderedFields, ...remainingFields].forEach((field) => {
             const value = project[field as keyof Project] as string;
             if (value) {
                 // A single field often lists several technologies.

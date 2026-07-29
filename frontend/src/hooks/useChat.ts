@@ -186,13 +186,22 @@ export const useChat = () => {
                             'That message did not go through. Try sending it again.',
                     },
                 ]);
+
+                // The send failed, so the suggestions come back and the visitor
+                // has something to do other than retype. QuickMessages still
+                // renders nothing once the ladder has run out.
+                setShowQuickMessages(true);
             }
         } catch (error) {
             console.error('Error sending message:', error);
+            setShowQuickMessages(true);
         } finally {
+            // Visibility is decided by whichever branch above knows the outcome.
+            // Deciding it here as well would override those choices, and would
+            // read `quickMessageState` from the render that started this call
+            // rather than the value just set.
             setIsLoading(false);
             setMessage('');
-            setShowQuickMessages(quickMessageState.level < 3);
         }
     };
 

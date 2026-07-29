@@ -72,8 +72,8 @@ const About: React.FC = () => {
                             className="underline transition-colors text-content hover:text-signal underline-offset-4 decoration-border"
                         >
                             assistant on the home page
-                        </a>{' '}
-                        answers from the same document and may still be up.
+                        </a>
+                        , which answers from the same document and may still be up.
                     </p>
                     <p className="mt-3 font-mono text-xs break-words text-muted/70">{error}</p>
                 </div>

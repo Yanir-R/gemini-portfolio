@@ -38,9 +38,10 @@ const Chat: React.FC = () => {
 
     const handleQuickMessageSelect = async (
         selected: string,
-        nextQuestions?: QuickMessageOption[]
+        nextQuestions?: QuickMessageOption[],
+        isEmailRelated?: boolean
     ) => {
-        await handleSendMessage(selected, nextQuestions);
+        await handleSendMessage(selected, nextQuestions, isEmailRelated);
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,7 +55,11 @@ const Chat: React.FC = () => {
         setIsTyping(false);
     };
 
-    const handleEmailClick = () => handleQuickMessageSelect(FINAL_QUESTION.message, undefined);
+    // The header button is the same request as the final suggestion, so it ends
+    // the ladder the same way rather than leaving suggestions on screen behind
+    // the email exchange.
+    const handleEmailClick = () =>
+        handleQuickMessageSelect(FINAL_QUESTION.message, undefined, FINAL_QUESTION.isEmailRelated);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });

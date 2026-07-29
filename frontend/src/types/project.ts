@@ -16,22 +16,25 @@ export interface Project {
     category: string;
     content?: string;
 
-    // Technical details (parsed from markdown)
+    /*
+     * Technical details, parsed from the write-up's `- **Label**: value` lines.
+     *
+     * The backend derives the key from the label, so the set is open: a new
+     * bullet in the markdown becomes a new field with no code change at either
+     * end. Enumerating them here would mean a list that has to be kept in step
+     * with prose, and any label missing from it would silently never render.
+     *
+     * The named ones below are those the card orders deliberately; the index
+     * signature carries everything else a write-up declares.
+     */
     tech_frontend?: string;
     tech_backend?: string;
     tech_ai_ml?: string;
     tech_cloud_platform?: string;
-    tech_container_orchestration?: string;
-    tech_task_queue?: string;
     tech_database?: string;
-    tech_deployment?: string;
     tech_framework?: string;
-    tech_authentication?: string;
-    tech_payment?: string;
-    tech_storage?: string;
-    tech_analytics?: string;
-    tech_push_notifications?: string;
-    tech_cdn?: string;
+    tech_deployment?: string;
+    [techField: `tech_${string}`]: string | undefined;
 }
 
 export interface ProjectsResponse {
