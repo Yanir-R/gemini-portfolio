@@ -18,15 +18,18 @@ Full-stack engineer specializing in production LLM and multi-agent systems. Work
 
 ### Founding Engineer - seed-stage AI SRE platform _Aug 2025 - present_
 
-<!-- The company is not named here, matching the public LinkedIn entry. -->
+<!-- The company is not named here, matching the public LinkedIn entry. This file
+     is published and is also read by the site's chat, so it describes what was
+     built and why it mattered - not the employer's internal topology, component
+     inventory or incident metrics. Keep new bullets to that standard. -->
 
 Multi-agent LLM investigations over Kubernetes, AWS and observability telemetry, producing evidence-cited root-cause analysis.
 
--   Designed the evidence-provenance architecture across three services, binding citations to retrieved evidence instead of letting the synthesizer model choose them - removing a structural class of hallucinated evidence rather than filtering it after the fact
--   Cut multi-agent token cost and latency by root-causing runaway fan-out and context bloat, including a query that dispatched 32 sub-agents for 369K wasted tokens and an agent that accumulated 6.1M tokens of tool results, through agent decomposition, context compaction and circuit-breaker enforcement
--   Built a tool-failure guard with error-classified retry and self-healing query repair, later generalized into a second service
--   Shipped a linter validating LLM-generated queries across eight query languages before execution, and Qdrant-backed semantic retrieval for agent skill hints
--   Built Go and Python services: the Kafka consumer/aggregator/router pipeline and the Redis + MongoDB session store
+-   Designed an evidence-provenance architecture that binds citations to retrieved evidence rather than letting the synthesizing model choose them - removing a structural class of hallucinated citations instead of filtering them after the fact
+-   Cut multi-agent token cost and latency by root-causing runaway fan-out and context bloat, through agent decomposition, context compaction and circuit-breaker enforcement
+-   Built a tool-failure guard with error-classified retry and self-healing query repair
+-   Shipped a linter validating LLM-generated queries before execution, and vector-backed semantic retrieval for agent skill hints
+-   Built Go and Python backend services across the event pipeline and session storage
 -   Led the product frontend in Next.js and React: chat and session architecture, SSE token streaming, evidence renderers, and the Next.js and React 19 migration
 
 ### Moonsite - Full Stack Developer _2023 - 2025_

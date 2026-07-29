@@ -94,7 +94,7 @@ const ProjectDetail: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="px-4 pt-24 pb-16 mx-auto max-w-3xl">
+            <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-3xl">
                 <p className="font-mono text-sm text-muted" role="status">
                     Loading<span className="animate-blink">…</span>
                 </p>
@@ -104,7 +104,7 @@ const ProjectDetail: React.FC = () => {
 
     if (error || !project) {
         return (
-            <div className="px-4 pt-24 pb-16 mx-auto max-w-3xl">
+            <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-3xl">
                 <p className="label">Not found</p>
                 <h1 className="mt-3 text-2xl font-semibold tracking-tight text-content">
                     No write-up at this address.
@@ -133,7 +133,7 @@ const ProjectDetail: React.FC = () => {
         canCollapse && !showAllTech ? techStack.slice(0, TECH_SHOWN_COLLAPSED) : techStack;
 
     return (
-        <div className="px-4 pt-24 pb-16 mx-auto max-w-3xl">
+        <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-3xl">
             <Link
                 to="/projects"
                 className="font-mono text-xs tracking-wider uppercase transition-colors duration-200 text-muted hover:text-content"

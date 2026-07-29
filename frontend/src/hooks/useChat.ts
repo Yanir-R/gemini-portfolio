@@ -200,6 +200,21 @@ export const useChat = () => {
         }
     };
 
+    /*
+     * True while the assistant has asked for an address and not yet received a
+     * valid one. The backend already reports this per reply; nothing was reading
+     * it, so the composer went on inviting questions about the work at the exact
+     * moment the visitor was being asked for their email.
+     *
+     * Read off the last assistant turn rather than a separate flag, so an
+     * invalid address (which comes back with the same flag set again) keeps the
+     * state on, and a successful submission clears it.
+     */
+    const lastReply = [...chatHistory]
+        .reverse()
+        .find((m) => m.type === 'ai' || m.type === 'confirm');
+    const awaitingEmail = Boolean(lastReply?.is_email_collection && !lastReply?.email_collected);
+
     return {
         message,
         setMessage,
@@ -209,5 +224,6 @@ export const useChat = () => {
         handleSendMessage,
         showQuickMessages,
         quickMessageState,
+        awaitingEmail,
     };
 };

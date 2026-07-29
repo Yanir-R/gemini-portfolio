@@ -44,3 +44,13 @@ yarn-error.log*
 # Allow these to be committed since they don't contain secrets
 !.env.example
 !.env.production
+
+# Yanir's photograph. The image is public once the site renders it, so this is
+# not about hiding his face - it is that this repository is public and git
+# history is permanent. A personal photo committed here survives every fork and
+# every clone, long after any decision to take it down.
+#
+# Production supplies it through VITE_AVATAR_URL instead, and the committed
+# placeholder is the initial-letter mark the avatar falls back to, so a fresh
+# clone renders correctly with no binary in the tree. See src/components/MessageAvatar.tsx.
+/public/profile.jpeg

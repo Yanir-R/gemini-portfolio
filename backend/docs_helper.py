@@ -28,7 +28,11 @@ PROFILE_DIR = os.path.join(DOCS_DIR, "profile")
 TEMPLATES_DIR = os.path.join(DOCS_DIR, "templates")
 
 PROJECTS_DIR = os.path.join(DOCS_DIR, "projects")
-STATIC_DIR = os.path.join(BASE_DIR, "static", "projects")
+
+# There is deliberately no STATIC_DIR. Project screenshots are frontend assets,
+# served from the CDN alongside the rest of the site; routing them through this
+# API would put static files back on a single-region container, which is the
+# arrangement the move to Cloudflare Pages existed to undo.
 
 def read_markdown_file(file_path: str) -> str:
     """Read content from markdown file"""
@@ -145,18 +149,34 @@ def get_all_projects() -> List[Dict[str, Any]]:
                 metadata['slug'] = filename[:-3]  # Remove .md extension
                 metadata['content'] = content
                 
-                # Check for media file
+                # A `## Media` value is a location the browser can fetch: an
+                # absolute URL, or a root-relative path served by the frontend
+                # out of `public/`. Anything else is a mistake in the write-up.
+                #
+                # The alternative - a bare filename resolved against a backend
+                # static directory - was removed rather than kept. That
+                # directory did not exist, nothing mounted `/static`, and no
+                # write-up used the form, so the branch could only ever produce
+                # a URL that 404s. Serving screenshots from the API container
+                # would also undo the point of moving the frontend to a CDN.
                 media_name = metadata.get('media', '')
                 if media_name:
-                    # Check if it's an external URL
-                    if media_name.startswith(('http://', 'https://')):
+                    if media_name.startswith(('http://', 'https://', '/')):
                         metadata['has_media'] = True
                         metadata['media_url'] = media_name
                     else:
-                        # Local file path
-                        media_path = os.path.join(STATIC_DIR, media_name)
-                        metadata['has_media'] = os.path.exists(media_path)
-                        metadata['media_url'] = f"/static/projects/{media_name}" if metadata['has_media'] else None
+                        # Named rather than silently dropped: a screenshot that
+                        # does not appear is otherwise indistinguishable from a
+                        # write-up that never had one.
+                        logger.warning(
+                            "Project %s: media %r is neither an absolute URL nor a "
+                            "root-relative path, so it cannot be fetched. Put the file in "
+                            "frontend/public/projects/ and reference it as "
+                            "/projects/<name>.",
+                            filename, media_name,
+                        )
+                        metadata['has_media'] = False
+                        metadata['media_url'] = None
                 
                 # Parse featured as boolean (if not already parsed)
                 featured_value = metadata.get('featured', False)

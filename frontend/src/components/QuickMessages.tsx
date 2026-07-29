@@ -35,10 +35,15 @@ const QuickMessageButton: React.FC<QuickMessageButtonProps> = ({
             type="button"
             onClick={() => onClick(message, nextQuestions, isEmailRelated, messageAvatar)}
             disabled={disabled}
-            className="flex flex-col gap-0.5 items-start px-3 py-2 w-full text-left rounded border transition-colors duration-200 border-border bg-ink-800 hover:border-border-hover disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex flex-col gap-0.5 items-start px-3 py-1.5 w-full text-left rounded border transition-colors duration-200 sm:py-2 border-border bg-ink-800 hover:border-border-hover disabled:cursor-not-allowed disabled:opacity-40"
         >
             <span className="text-sm leading-snug text-content">{title}</span>
-            <span className="font-mono text-[0.68rem] leading-snug text-muted">{description}</span>
+            {/* Hidden on the narrowest screens. Stacked one per row, three
+                descriptions cost roughly a third of the panel's height on a
+                phone, and every title here is already a complete question. */}
+            <span className="hidden font-mono text-[0.68rem] leading-snug sm:block text-muted">
+                {description}
+            </span>
         </button>
     );
 };

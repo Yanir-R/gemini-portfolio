@@ -58,7 +58,7 @@ const Projects: React.FC = () => {
     }, [reloadToken]);
 
     return (
-        <div className="px-4 pt-24 pb-16 mx-auto max-w-6xl">
+        <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-6xl">
             <header className="max-w-2xl">
                 <p className="label">Work</p>
                 <h1 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl text-content">

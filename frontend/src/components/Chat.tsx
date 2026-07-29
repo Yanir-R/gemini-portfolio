@@ -37,6 +37,7 @@ const Chat: React.FC = () => {
         handleSendMessage,
         showQuickMessages,
         quickMessageState,
+        awaitingEmail,
     } = useChat();
 
     const [isTyping, setIsTyping] = useState(false);
@@ -75,12 +76,21 @@ const Chat: React.FC = () => {
         setShowScrollButton(scrollHeight - scrollTop - clientHeight >= 100);
     };
 
+    // Not on the first render. Scrolling to the end of a transcript that is only
+    // the greeting pins its *last* line to the bottom of the panel and pushes
+    // its first line up behind the header, so the opening message arrived
+    // already cut off. There is nothing below the greeting to scroll to; the
+    // scroll only earns its place once a reply exists.
     useEffect(() => {
+        if (chatHistory.length <= 1 && !isLoading) return;
         scrollToBottom();
     }, [chatHistory, isLoading]);
 
-    // Three states, three different sentences. "Loading files..." described the
-    // server's job; a visitor only needs to know whether they can type yet.
+    // The placeholder is the only instruction the composer gives, so it has to
+    // track what the conversation is actually asking for. It previously invited
+    // a question about the work even while the assistant was waiting for an
+    // email address, which is the moment a visitor most needs telling what to
+    // type - and that a message alongside it is optional.
     const placeholder =
         hasFiles === null
             ? 'Connecting…'
@@ -88,32 +98,51 @@ const Chat: React.FC = () => {
               ? 'Unavailable: the notes could not be loaded'
               : isLoading
                 ? 'Waiting for a reply…'
-                : 'Ask about the work, or how it was built';
+                : awaitingEmail
+                  ? // Kept short deliberately: a placeholder that overflows the
+                    // input is worse than a vaguer one, and the longer version
+                    // clipped mid-word at "(optiona…".
+                    'Your email address (a message is optional)'
+                  : 'Ask about the work, or how it was built';
 
+    // The height was `100vh - 15rem`, which assumed the page could not scroll
+    // and that the hero above it was short. Both stopped being true: on a phone
+    // it resolved taller than the space left for it, so the composer was pushed
+    // off the bottom of a viewport that was also locked.
+    //
+    // A plain fixed height is enough now that the page scrolls - the transcript
+    // has its own scrollbar, so the panel never needs to grow - and it only
+    // stretches to fill its column at `lg`. The keyboard case keeps a
+    // viewport-relative height, because that is the one moment the visible area
+    // really does change under it.
     return (
         <div
             className={`flex flex-col ${
-                isKeyboardVisible
-                    ? 'h-[calc(var(--vh,1vh)*80)]'
-                    : 'h-[calc(var(--vh,1vh)*100-15rem)]'
-            } sm:h-[600px] relative overflow-hidden rounded border border-border bg-ink-800`}
+                isKeyboardVisible ? 'h-[calc(var(--vh,1vh)*65)]' : 'h-[30rem]'
+            } sm:h-[36rem] lg:h-full relative overflow-hidden rounded border border-border bg-ink-800`}
         >
             {/* Header */}
-            <div className="flex gap-4 justify-between items-center px-4 py-3 border-b border-border">
-                {/* Two rejected attempts before this one, and the second failed
-                    for a different reason than the first.
+            <div className="flex gap-2 justify-between items-center px-3 py-2.5 border-b sm:gap-4 sm:px-4 sm:py-3 border-border">
+                {/* Fourth attempt, and the first three each failed differently:
+                    "Grounded assistant" was jargon, "Answers from my notes"
+                    repeated the line directly above the panel, and "AI
+                    assistant" was accurate in isolation but disagreed with its
+                    own neighbours.
 
-                    "Grounded assistant" was jargon. "Answers from my notes" was
-                    plain English but redundant: the line directly above the panel
-                    already says the assistant answers from the notes, so a
-                    visitor read the same sentence twice within three seconds.
+                    Adding Yanir's photograph turned that disagreement into three
+                    speakers in one header: a label saying machine, a face saying
+                    Yanir, and a greeting that switched person mid-sentence. The
+                    replies themselves are first-person as Yanir, because
+                    prompt.py requires it.
 
-                    The label's remaining job is not to explain behaviour - the
-                    hero does that - but to name the thing, and to state the one
-                    fact the hero leaves out: it is a machine, not Yanir. */}
-                <p className="label">AI assistant</p>
+                    So the panel commits to one speaker and states the
+                    arrangement outright. Disclosure belongs in a label a visitor
+                    reads once, not in the grammar of every sentence. */}
+                <p className="label whitespace-nowrap text-[0.62rem] sm:text-[0.72rem]">
+                    AI, answering as Yanir
+                </p>
 
-                <div className="flex gap-4 items-center">
+                <div className="flex flex-shrink-0 gap-3 items-center">
                     {/* Report by exception.
                         A green "online" dot borrows the presence indicator from
                         chat apps, where it means a person is at their keyboard.
@@ -133,12 +162,45 @@ const Chat: React.FC = () => {
                         </span>
                     )}
 
+                    {/* This was mono, uppercase, muted and borderless, which is
+                        the exact styling of the label on the other side of the
+                        same row. Two pieces of identical-looking text, one inert
+                        and one the only action in the panel.
+
+                        It now carries every affordance the design language has
+                        available: a border like the site's other buttons, the
+                        signal colour reserved for things that do something, an
+                        icon, and a hover state that fills rather than merely
+                        tinting.
+
+                        The label is "Leave your email" rather than "Email me"
+                        because the two describe different mechanics. "Email me"
+                        promises a mail client or a modal; this button does
+                        neither. It posts a turn into the conversation, and the
+                        visitor then types their address into the same composer
+                        they were asking questions with. Naming the action the
+                        visitor performs sets that expectation; naming the
+                        outcome did not. */}
                     <button
                         type="button"
                         onClick={handleEmailClick}
-                        className="font-mono text-xs tracking-wider uppercase transition-colors duration-200 text-muted hover:text-signal"
+                        className="flex flex-shrink-0 gap-1.5 items-center px-2 py-1 font-mono text-[0.62rem] tracking-wider uppercase whitespace-nowrap rounded border transition-colors duration-200 sm:px-2.5 sm:text-xs text-signal border-signal/40 hover:border-signal hover:bg-signal/10"
                     >
-                        Email me
+                        <svg
+                            aria-hidden="true"
+                            className="w-3.5 h-3.5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={1.75}
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                            />
+                        </svg>
+                        Leave your email
                     </button>
                 </div>
             </div>
@@ -167,8 +229,8 @@ const Chat: React.FC = () => {
                             <p
                                 className={`whitespace-pre-wrap break-words leading-relaxed ${
                                     msg.type === 'user'
-                                        ? 'text-[0.95rem] text-muted'
-                                        : 'text-[1.05rem] text-content'
+                                        ? 'text-[0.9rem] text-muted sm:text-[0.95rem]'
+                                        : 'text-base text-content sm:text-[1.05rem]'
                                 }`}
                             >
                                 {msg.content}

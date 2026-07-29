@@ -49,7 +49,7 @@ const About: React.FC = () => {
     }, []);
 
     return (
-        <div className="px-4 pt-24 pb-16 mx-auto max-w-2xl">
+        <div className="px-4 pt-8 pb-16 sm:pt-12 mx-auto max-w-2xl">
             {/* The name and role live here rather than in about-me.md so the
                 document stays pure prose - it is also sent to the model as
                 context, where a heading is noise. */}

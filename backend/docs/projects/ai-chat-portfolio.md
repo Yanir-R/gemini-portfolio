@@ -38,7 +38,7 @@ https://yanir-portfolio.pages.dev
 https://github.com/Yanir-R/gemini-portfolio
 
 ## Media
-https://i.ibb.co/wZdp34Tw/Screenshot-2025-07-30-at-14-30-25.png
+/projects/portfolio-home.png
 
 ## Featured
 true

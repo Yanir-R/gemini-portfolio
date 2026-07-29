@@ -2,7 +2,10 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!-- viewport-fit=cover exposes the safe-area insets the chat reads. Zoom is
+             deliberately not disabled: the previous runtime override set
+             maximum-scale=1.0 and user-scalable=0, which blocks pinch zoom. -->
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
         <title>Yanir Rot - Full-Stack AI Engineer</title>
         <meta name="title" content="Yanir Rot - Full-Stack AI Engineer" />
