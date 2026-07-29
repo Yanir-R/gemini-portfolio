@@ -1,5 +1,6 @@
 import React from 'react';
 import Chat from '@/components/Chat';
+import { SITE_COPY } from '@/constants/config';
 
 /*
  * The hero is the page's thesis, not a greeting.
@@ -54,7 +55,7 @@ const Home: React.FC = () => {
                         only guards the last line against an orphan and leaves
                         the rest to fill naturally. */}
                     <h1 className="text-2xl font-semibold tracking-tight leading-[1.15] text-pretty sm:text-3xl md:text-4xl lg:text-5xl lg:leading-[1.12] text-content">
-                        I build AI products end to end, then make them trustworthy. That&apos;s the
+                        I build AI products end to end, then make them trustworthy. That’s the
                         harder half.
                     </h1>
                     {/* No positional word here. "The assistant below" was true
@@ -62,9 +63,12 @@ const Home: React.FC = () => {
                         moment it became two. Copy that describes the layout has
                         to be revisited every time the layout moves; copy that
                         describes the thing does not. */}
+                    {/* Read from SITE_COPY rather than written here: the same
+                        sentence has to appear in the meta tags and on the link
+                        preview card, and the copy that lived in five places is
+                        the copy that went stale in four of them. */}
                     <p className="mt-3 text-base leading-relaxed sm:mt-4 sm:text-lg lg:mt-5 lg:text-xl text-muted">
-                        The assistant answers as me, from my notes and project write-ups. When they
-                        don&apos;t cover your question it says so rather than guessing.
+                        {SITE_COPY.STANDFIRST}
                     </p>
 
                     {/* The dare. One line, in mono behind a rule, so it reads as

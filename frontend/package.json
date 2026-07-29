@@ -11,6 +11,7 @@
         "lint": "eslint .",
         "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.{mts,js,json}\"",
         "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.{mts,js,json}\"",
+        "check:preview-copy": "node scripts/check-preview-copy.mjs",
         "build": "npm run typecheck && vite build",
         "build:dev": "npm run typecheck && vite build --mode development",
         "build:prod": "npm run typecheck && vite build --mode production",

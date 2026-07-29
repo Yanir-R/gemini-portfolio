@@ -48,6 +48,14 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         run: npm run format:check
 
+      - name: Check link-preview copy
+        working-directory: ${{ env.FRONTEND_DIR }}
+        # index.html and tools/og-image.html cannot import the page's constants,
+        # so the standfirst is duplicated into them by hand. A stale preview
+        # passes every other check here - the page renders correctly and the
+        # only symptom shows up in someone else's Slack.
+        run: npm run check:preview-copy
+
       - name: Build
         working-directory: ${{ env.FRONTEND_DIR }}
         # Compile check only — this artifact is never deployed, so it runs
