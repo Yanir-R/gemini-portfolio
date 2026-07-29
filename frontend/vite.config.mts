@@ -109,16 +109,37 @@ const TRAINING_CRAWLERS = [
  *
  * Notes on the specific choices, since a CSP is easy to copy and hard to read:
  *
- *   script-src 'self'   No 'unsafe-inline'. The JSON-LD block in index.html is
- *                       a data block, not executable script - the HTML parser
- *                       never prepares it for execution, so CSP does not gate
- *                       it and structured data survives the strict policy.
+ *   script-src          'self' plus static.cloudflareinsights.com, with
+ *                       cloudflareinsights.com in connect-src to match.
+ *                       Cloudflare injects its Web Analytics beacon into HTML
+ *                       responses at the edge, so it is not in the built bundle
+ *                       and nothing in this repository referenced it - which is
+ *                       exactly why the first strict policy blocked it, and why
+ *                       the error only appeared in a real browser. Analytics the
+ *                       platform adds still has to be declared by the policy the
+ *                       platform serves.
+ *
+ *                       Still no 'unsafe-inline'. The JSON-LD block in
+ *                       index.html is a data block rather than executable
+ *                       script - the HTML parser never prepares it for
+ *                       execution, so CSP does not gate it and the structured
+ *                       data survives the strict policy.
  *   style-src           'unsafe-inline' is required: three components set a
  *                       `style` attribute to pass a CSS custom property, and
  *                       style attributes are inline styles as far as CSP cares.
- *   img-src             'self' covers the avatar's committed fallback. When
- *                       VITE_AVATAR_URL points at an external host, that host's
- *                       origin is added rather than opening img-src to https:.
+ *   img-src             'self' data: https:. Broader than the rest of this
+ *                       policy, and deliberately. Project and writing images
+ *                       are markdown Yanir writes, served from the backend at
+ *                       runtime, and today they live on i.ibb.co. An allowlist
+ *                       of image hosts would be tighter and would also break
+ *                       silently every time he pasted an image from somewhere
+ *                       new - the page would render with a hole in it and the
+ *                       only symptom would be a console error in a visitor's
+ *                       browser, not his. An image cannot execute, the site
+ *                       holds no session to steal, and upgrade-insecure-requests
+ *                       keeps this to https, so the cost of the wider directive
+ *                       is a tracking pixel the author would have to add on
+ *                       purpose.
  *   frame-ancestors     'none' stops the site being framed - clickjacking cover
  *                       that X-Frame-Options duplicates for older agents.
  *
@@ -130,7 +151,13 @@ const TRAINING_CRAWLERS = [
  * decision made once the domain's subdomain plans are settled, not a default
  * inherited from a config file.
  */
-const emitSecurityHeaders = (backendUrl: string, avatarUrl: string) => {
+// Cloudflare's Web Analytics beacon. The script is injected into HTML at the
+// edge rather than bundled, and it reports to a second host, so both have to be
+// named or the browser blocks the script and then the request it makes.
+const CF_ANALYTICS_SCRIPT = 'https://static.cloudflareinsights.com';
+const CF_ANALYTICS_REPORTING = 'https://cloudflareinsights.com';
+
+const emitSecurityHeaders = (backendUrl: string) => {
     const originOf = (u: string) => {
         try {
             return new URL(u).origin;
@@ -138,8 +165,9 @@ const emitSecurityHeaders = (backendUrl: string, avatarUrl: string) => {
             return '';
         }
     };
-    const connectSrc = ["'self'", originOf(backendUrl)].filter(Boolean).join(' ');
-    const imgSrc = ["'self'", 'data:', originOf(avatarUrl)].filter(Boolean).join(' ');
+    const connectSrc = ["'self'", originOf(backendUrl), CF_ANALYTICS_REPORTING]
+        .filter(Boolean)
+        .join(' ');
 
     const csp = [
         "default-src 'self'",
@@ -147,10 +175,10 @@ const emitSecurityHeaders = (backendUrl: string, avatarUrl: string) => {
         "form-action 'self'",
         "frame-ancestors 'none'",
         "object-src 'none'",
-        "script-src 'self'",
+        `script-src 'self' ${CF_ANALYTICS_SCRIPT}`,
         "style-src 'self' 'unsafe-inline'",
         "font-src 'self'",
-        `img-src ${imgSrc}`,
+        "img-src 'self' data: https:",
         `connect-src ${connectSrc}`,
         'upgrade-insecure-requests',
     ].join('; ');
@@ -168,7 +196,7 @@ const emitSecurityHeaders = (backendUrl: string, avatarUrl: string) => {
     ].join('\n');
 };
 
-const emitDiscoveryFiles = (siteUrl: string, backendUrl: string, avatarUrl: string) => ({
+const emitDiscoveryFiles = (siteUrl: string, backendUrl: string) => ({
     name: 'emit-discovery-files',
     generateBundle() {
         const robots = [
@@ -252,7 +280,7 @@ const emitDiscoveryFiles = (siteUrl: string, backendUrl: string, avatarUrl: stri
             ['robots.txt', robots],
             ['sitemap.xml', sitemap],
             ['llms.txt', llms],
-            ['_headers', emitSecurityHeaders(backendUrl, avatarUrl)],
+            ['_headers', emitSecurityHeaders(backendUrl)],
         ] as const) {
             this.emitFile({ type: 'asset', fileName, source });
         }
@@ -307,7 +335,7 @@ export default defineConfig(({ mode, command }) => {
                     handler: (html: string) => html.replaceAll('%VITE_SITE_URL%', resolvedSiteUrl),
                 },
             },
-            emitDiscoveryFiles(resolvedSiteUrl, resolvedBackendUrl, env.VITE_AVATAR_URL || ''),
+            emitDiscoveryFiles(resolvedSiteUrl, resolvedBackendUrl),
         ],
         server: {
             port: 3000,
