@@ -192,19 +192,20 @@ jobs:
             --timeout=300 \
             --service-account=${{ vars.GCP_RUNTIME_SA }} \
             --set-env-vars="^|^ENVIRONMENT=${{ env.ENVIRONMENT }}|EMAIL_ADDRESS=${{ secrets.EMAIL_ADDRESS }}|YOUR_EMAIL=${{ secrets.YOUR_EMAIL }}|ALLOWED_ORIGINS=${{ vars.ALLOWED_ORIGINS }}" \
-            --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,EMAIL_PASSWORD=email-password:latest" \
+            --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,EMAIL_PASSWORD=email-password:latest,ORIGIN_SHARED_SECRET=edge-shared-secret:latest" \
             --labels="managed-by=github-actions,commit-sha=${{ github.sha }}" \
             --quiet
 
-      - name: Install Beta Components
-        run: gcloud components install beta --quiet
-
-      - name: Map Custom Domain
-        if: github.ref == 'refs/heads/prod' || github.ref == 'refs/heads/main'
-        run: |
-          DOMAIN="${{ github.ref == 'refs/heads/prod' && secrets.PROD_DOMAIN || secrets.DEV_DOMAIN }}"
-          gcloud beta run domain-mappings create \
-            --service backend \
-            --domain api.$DOMAIN \
-            --region me-west1 \
-            --quiet || echo "Domain mapping failed but continuing deployment"
+      # The "Map Custom Domain" step that used to live here is gone, along with
+      # the beta components install that existed only to support it.
+      #
+      # It had never once worked: `gcloud beta run domain-mappings list` returns
+      # nothing, because Cloud Run domain mappings are not offered in me-west1.
+      # Every run failed and every run printed "continuing deployment", so the
+      # deploy stayed green and the step read as working for as long as nobody
+      # checked. A step that cannot succeed is worse than a missing one - it
+      # answers the question "is the API on a custom domain?" with a reassuring
+      # lie.
+      #
+      # api.yanirrot.com is now served by the Worker in edge/, which reaches
+      # Cloud Run over its run.app URL and needs no mapping.

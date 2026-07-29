@@ -2,3 +2,6 @@
 # container image.
 -r requirements.txt
 pytest==9.1.1
+# Starlette's TestClient is an httpx client under the hood, so exercising the
+# app over HTTP - which is the only way to test middleware - needs httpx here.
+httpx==0.28.1
