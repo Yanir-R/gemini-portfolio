@@ -250,3 +250,102 @@ def test_debug_and_ungrounded_endpoints_are_gone():
     assert "/check-paths" not in paths
     assert "/generate-text" not in paths
     assert "/api/chat/status" in paths
+
+
+# ---------------------------------------------------------------------------
+# Regressions for the Qodo review on PR #7
+# ---------------------------------------------------------------------------
+#
+# Each of these was a real finding, reproduced before it was fixed. They are
+# here because all four are silent failures: nothing crashes, and the only
+# symptom is a wrong answer or a stale corpus.
+
+
+def test_corpus_without_profile_fails_closed(tmp_path, monkeypatch):
+    """Project and writing documents alone must not count as a ready corpus.
+
+    Without this, an unreadable profile directory still reports the chat ready
+    and answers in Yanir's first person with nothing about Yanir behind it.
+    """
+    import context
+
+    monkeypatch.setattr(context, "PROFILE_DIR", str(tmp_path / "absent-profile"))
+    context._cache = None
+
+    knowledge = context._build()
+    assert knowledge.is_empty, "a corpus with no profile section must be empty"
+
+
+def test_partial_corpus_is_not_cached(monkeypatch):
+    """A source that fails to read must not be cached away until its mtime moves.
+
+    The fingerprint counts files, so it doubles as the expected section count;
+    fewer sections than files means a read failed.
+    """
+    import context
+
+    real_build = context._build
+
+    def build_missing_one():
+        full = real_build()
+        return context.Knowledge(
+            text=full.text,
+            sources=full.sources[:-1],
+            approx_tokens=full.approx_tokens,
+        )
+
+    monkeypatch.setattr(context, "_build", build_missing_one)
+    context._cache = None
+
+    knowledge = context.get_knowledge()
+    assert not knowledge.is_empty, "the partial corpus is still served for this request"
+    assert context._cache is None, "a partial corpus must not be cached"
+
+    context._cache = None
+
+
+def _response_with_finish_reason(name):
+    """The minimum shape `_log_usage` inspects."""
+    finish = type("FinishReason", (), {"name": name})()
+    candidate = type("Candidate", (), {"finish_reason": finish})()
+    return type("Response", (), {"candidates": [candidate], "usage_metadata": None})()
+
+
+def test_truncated_response_is_reported(monkeypatch):
+    """MAX_TOKENS is invisible otherwise: the call succeeds and text looks fine."""
+    import gemini_helper
+
+    assert gemini_helper._log_usage("test", _response_with_finish_reason("MAX_TOKENS")) is True
+    assert gemini_helper._log_usage("test", _response_with_finish_reason("STOP")) is False
+
+
+def test_technical_questions_do_not_trigger_contact_flow():
+    """A question about the work can contain a contact phrase and still be a question.
+
+    "How does your email integration work?" holds "your email" but is asking
+    about a system, and answering it with the address prompt is the same false
+    positive the phrase list was meant to remove.
+    """
+    import main
+
+    def routes_to_contact(message):
+        lowered = message.lower()
+        return any(p in lowered for p in main.CONTACT_INTENT_PHRASES) and not main._TOPIC_QUESTION.search(
+            message
+        )
+
+    for question in (
+        "How does your email integration work?",
+        "How does your email flow handle failures?",
+        "What did you learn building your email pipeline?",
+        "Why does your email retry twice?",
+    ):
+        assert not routes_to_contact(question), question
+
+    for request in (
+        "How do I reach you?",
+        "Can I contact you about a role?",
+        "what's your email?",
+        "I'd like to get in touch.",
+    ):
+        assert routes_to_contact(request), request

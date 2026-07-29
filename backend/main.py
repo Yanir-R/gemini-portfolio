@@ -69,6 +69,24 @@ EMAIL_SEND_FAILED_MESSAGE = (
 # for the visitor's address instead of an answer about the backend. On a site
 # whose argument is that it answers from its sources, silently refusing to answer
 # a legitimate question is the most expensive bug available.
+# A message can contain a contact phrase and still be a question about the work.
+# "How does your email integration work?" holds "your email" but is asking about a
+# system, not for an address, and answering it with the contact prompt is the same
+# class of false positive the phrase list was introduced to remove.
+#
+# The discriminator is grammatical rather than a list of technical nouns, which
+# would need extending forever: a question *about* something is third person or
+# addressed to Yanir's practice ("how does...", "how do you...", "what did you
+# learn..."), while a contact request is first person and addressed at him
+# ("how do I reach you", "can I contact you"). Note "how do you" is excluded and
+# "how do I" is not - that single word is the difference.
+_TOPIC_QUESTION = re.compile(
+    r"\bhow (?:does|did|is|are|was|do you|would you|should you)\b"
+    r"|\bwhat (?:did|do) you (?:learn|use|build|do|run|choose)\b"
+    r"|\bwhy (?:does|did|is|are|do you)\b",
+    re.IGNORECASE,
+)
+
 CONTACT_INTENT_PHRASES = (
     "your email",
     "email you",
@@ -341,7 +359,8 @@ async def chat_with_files(chat_request: ChatRequest, request: Request):
         lowered = chat_request.message.lower()
         should_collect_email = (
             not any(msg.email_collected for msg in chat_request.conversation_history or []) and
-            any(phrase in lowered for phrase in CONTACT_INTENT_PHRASES)
+            any(phrase in lowered for phrase in CONTACT_INTENT_PHRASES) and
+            not _TOPIC_QUESTION.search(chat_request.message)
         )
 
         if should_collect_email:

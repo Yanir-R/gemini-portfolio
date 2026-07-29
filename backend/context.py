@@ -147,8 +147,26 @@ def _writing_sections() -> List[Tuple[str, str]]:
 
 
 def _build() -> Knowledge:
-    sections = _profile_sections() + _project_sections() + _writing_sections()
+    profile = _profile_sections()
+    sections = profile + _project_sections() + _writing_sections()
+
     if not sections:
+        return EMPTY
+
+    # Project and writing documents alone are not a profile. Without the profile
+    # the chat would report itself ready and answer in Yanir's first person with
+    # nothing about Yanir behind it - every question about his background
+    # declining, while the site claims an assistant that knows him.
+    #
+    # "An empty corpus is an error, not a fallback" has to extend to this case,
+    # or the fail-closed contract only holds for the one failure where every
+    # directory is missing at once.
+    if not profile:
+        logger.error(
+            "Profile directory %s produced no readable sections. Refusing to serve a "
+            "corpus of project and writing documents alone.",
+            PROFILE_DIR,
+        )
         return EMPTY
 
     # Each section is fenced and labelled so the model can attribute a fact to a
@@ -173,6 +191,26 @@ def get_knowledge() -> Knowledge:
         return _cache[1]
 
     knowledge = _build()
+
+    # A read failure becomes an empty string, the section is skipped, and the
+    # thinner corpus would otherwise be cached under a fingerprint that has not
+    # changed - so the lost document is not retried until its size or mtime does,
+    # or the process restarts.
+    #
+    # The fingerprint lists every readable file, so it doubles as the expected
+    # section count. Fewer sections than files means something on disk produced
+    # nothing, and the result is used for this request but deliberately not
+    # cached, so the next request tries again.
+    expected = len(fingerprint)
+    if knowledge.sources and len(knowledge.sources) < expected:
+        logger.error(
+            "Corpus built %d sections from %d files; a source failed to read. "
+            "Serving it for this request but not caching, so the next one retries.",
+            len(knowledge.sources),
+            expected,
+        )
+        return knowledge
+
     _cache = (fingerprint, knowledge)
 
     if knowledge.is_empty:

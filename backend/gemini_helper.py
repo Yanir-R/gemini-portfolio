@@ -71,6 +71,15 @@ MISCONFIGURED_MESSAGE = (
 GENERIC_ERROR_MESSAGE = (
     "That didn't go through on my end. Mind trying again?"
 )
+# Shown instead of a half-finished answer. `finish_reason=MAX_TOKENS` is the only
+# signal that one happened: the call succeeds and `response.text` reads like a
+# normal reply right up to the point it stops.
+TRUNCATED_RESPONSE_MESSAGE = (
+    "That answer ran past its length limit and got cut off mid-thought, so I'd "
+    "rather not leave you with half of it. Ask me again in a narrower way and "
+    "I'll keep it tighter."
+)
+
 EMPTY_RESPONSE_MESSAGE = (
     "I didn't manage to put an answer together for that one. "
     "Could you try rephrasing it?"
@@ -110,10 +119,26 @@ def get_gemini_response(
                 contents=contents,
                 config=config,
             )
-            _log_usage(model_id, response)
+            truncated = _log_usage(model_id, response)
 
             text = (response.text or "").strip()
-            return text if text else EMPTY_RESPONSE_MESSAGE
+            if not text:
+                return EMPTY_RESPONSE_MESSAGE
+
+            # A MAX_TOKENS finish means the visitor is looking at half a
+            # sentence. The call succeeded and `response.text` is a plausible
+            # string, which is exactly why this has to be checked rather than
+            # trusted: handing over a truncated answer in Yanir's voice presents
+            # an incomplete claim as a complete one.
+            #
+            # The prompt asks for two to four sentences, so hitting a 1,500
+            # token ceiling means something already went wrong - usually
+            # thinking tokens consuming the shared budget. Saying so is more use
+            # than a fragment.
+            if truncated:
+                return TRUNCATED_RESPONSE_MESSAGE
+
+            return text
 
         except Exception as e:
             last_error = e
@@ -138,7 +163,7 @@ def get_gemini_response(
     return _failure_message(last_error)
 
 
-def _log_usage(model_id: str, response) -> None:
+def _log_usage(model_id: str, response) -> bool:
     """Records what the request actually cost, and whether it was cut short.
 
     Nothing measured how many tokens a chat message consumed, which is why the
@@ -169,6 +194,9 @@ def _log_usage(model_id: str, response) -> None:
             model_id,
             MAX_OUTPUT_TOKENS,
         )
+        return True
+
+    return False
 
 
 def _failure_message(error: Optional[Exception]) -> str:
