@@ -20,8 +20,25 @@ Switching to gunicorn with multiple workers would multiply it again - see the
 note in backend/Dockerfile.
 
 Keeping the state in-process is intentional: a shared counter would mean running
-Redis for a portfolio site. It is also why the global default sits well below
-the upstream free-tier quota rather than at it.
+Redis for a portfolio site.
+
+The windows are deliberately different lengths, because the two limiters answer
+different questions. Contact is a rate: how often may somebody send. Chat is a
+budget: how many answers is one visitor entitled to - which is only meaningful
+over a span long enough to matter, so it runs over a day.
+
+That budget is set by what is upstream, and the previous numbers were set
+against the wrong picture of it. This file used to claim the global default sat
+"well below the upstream free-tier quota"; it did not. Gemini's free tier grants
+20 requests per DAY per model, while the old default allowed 40 per MINUTE per
+instance - four instances of that is roughly ten thousand times the real
+ceiling. The limiter was tuned as though the binding constraint were per-minute
+throughput. It is per-day volume, and the site ran into it the first time
+anybody sent a few dozen messages in a row.
+
+So the real capacity of this site on the free tier is about 20 chat answers per
+day per model, 60 across the three the fallback chain tries. Everything below is
+sized to fit inside that rather than to look generous.
 """
 
 import logging
@@ -58,9 +75,15 @@ def _int_env(name: str, default: int) -> int:
 class SlidingWindowLimiter:
     """Fixed-cost sliding window over request timestamps."""
 
-    def __init__(self, per_key_limit: int, global_limit: int):
+    def __init__(self, per_key_limit: int, global_limit: int, window_seconds: int = WINDOW_SECONDS):
         self.per_key_limit = per_key_limit
         self.global_limit = global_limit
+        # Per-limiter rather than a module constant, because the two limiters
+        # are answering different questions. Contact is a rate - how often may
+        # somebody send - so a minute is right. Chat is a budget: how many
+        # answers is one visitor entitled to, which only means anything over a
+        # span long enough to matter.
+        self.window_seconds = window_seconds
         self._keys: Dict[str, Deque[float]] = {}
         self._global: Deque[float] = deque()
         self._lock = threading.Lock()
@@ -68,15 +91,14 @@ class SlidingWindowLimiter:
         # to once per window rather than emitted per request.
         self._last_saturation_log = 0.0
 
-    @staticmethod
-    def _prune(window: Deque[float], now: float) -> None:
-        cutoff = now - WINDOW_SECONDS
+    def _prune(self, window: Deque[float], now: float) -> None:
+        cutoff = now - self.window_seconds
         while window and window[0] <= cutoff:
             window.popleft()
 
     def _sweep_idle_keys(self, now: float) -> None:
         """Drops keys whose windows have fully aged out."""
-        cutoff = now - WINDOW_SECONDS
+        cutoff = now - self.window_seconds
         stale = [key for key, window in self._keys.items() if not window or window[-1] <= cutoff]
         for key in stale:
             del self._keys[key]
@@ -89,7 +111,7 @@ class SlidingWindowLimiter:
             if self.global_limit:
                 self._prune(self._global, now)
                 if len(self._global) >= self.global_limit:
-                    retry_after = int(WINDOW_SECONDS - (now - self._global[0])) + 1
+                    retry_after = int(self.window_seconds - (now - self._global[0])) + 1
                     return False, max(1, retry_after)
 
             if self.per_key_limit:
@@ -119,7 +141,7 @@ class SlidingWindowLimiter:
                 if window is not None:
                     self._prune(window, now)
                     if len(window) >= self.per_key_limit:
-                        retry_after = int(WINDOW_SECONDS - (now - window[0])) + 1
+                        retry_after = int(self.window_seconds - (now - window[0])) + 1
                         return False, max(1, retry_after)
                     window.append(now)
 
@@ -191,9 +213,24 @@ def enforce_rate_limit(request: Request, limiter: "SlidingWindowLimiter", label:
     )
 
 
+# Ten answers per visitor per day, not per minute.
+#
+# Ten was always the intended allowance - enough to hold a real conversation
+# about the work, few enough that nobody drains the quota - but pinning it to a
+# minute meant it renewed 1,440 times a day, so it was never a cap on anything.
+# The number is unchanged; the span it covers is the fix.
+#
+# The global ceiling is per instance and Cloud Run runs up to four, so the worst
+# case is 4 x 12 = 48 upstream calls a day, under the ~60 the three-model
+# fallback chain can serve on the free tier. It is a cost guard rather than a
+# fairness one: it still holds when the per-visitor key is spoofed or when
+# traffic is spread across many addresses.
+DAY_SECONDS = 24 * 60 * 60
+
 chat_limiter = SlidingWindowLimiter(
-    per_key_limit=_int_env("RATE_LIMIT_CHAT_PER_IP_PER_MINUTE", 10),
-    global_limit=_int_env("RATE_LIMIT_CHAT_GLOBAL_PER_MINUTE", 40),
+    per_key_limit=_int_env("RATE_LIMIT_CHAT_PER_IP_PER_DAY", 10),
+    global_limit=_int_env("RATE_LIMIT_CHAT_GLOBAL_PER_DAY", 12),
+    window_seconds=_int_env("RATE_LIMIT_CHAT_WINDOW_SECONDS", DAY_SECONDS),
 )
 
 contact_limiter = SlidingWindowLimiter(

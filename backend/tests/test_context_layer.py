@@ -12,6 +12,8 @@ import re
 import pytest
 from google.genai import errors as genai_errors
 
+from conftest import ApiError
+
 import context
 import gemini_helper
 import main
@@ -25,8 +27,8 @@ from prompt import NO_KNOWLEDGE_MESSAGE, build_contents, build_system_instructio
 
 
 def _api_error(code: int) -> genai_errors.APIError:
-    """An APIError carrying a status code, without an HTTP response object."""
-    return genai_errors.APIError(code, {"error": {"message": "test"}})
+    """See conftest.ApiError for why this is not the SDK constructor."""
+    return ApiError(code)
 
 
 # --- what the corpus contains -------------------------------------------------
@@ -149,7 +151,14 @@ class _FakeClient:
 
 def _patch_client(monkeypatch, outcomes) -> _FakeModels:
     models = _FakeModels(outcomes)
-    monkeypatch.setattr(gemini_helper.genai, "Client", lambda api_key: _FakeClient(models))
+    # **kwargs rather than a fixed signature: the real client is constructed
+    # with whatever configuration the caller needs - http_options carries the
+    # request timeout, for one - and a stub that pins the argument list turns
+    # every future addition into a test failure about the stub rather than
+    # about the behaviour under test.
+    monkeypatch.setattr(
+        gemini_helper.genai, "Client", lambda **kwargs: _FakeClient(models)
+    )
     return models
 
 
