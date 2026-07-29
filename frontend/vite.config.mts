@@ -33,24 +33,57 @@ const DEFAULT_SITE_URL = {
 // following links instead.
 const STATIC_ROUTES = ['/', '/about', '/projects', '/blog'] as const;
 
-// Crawlers named individually in robots.txt. A blanket `User-agent: *` already
-// permits them, but two treat an explicit entry as the deciding signal:
-// Google-Extended governs whether Gemini and AI Overviews may use the page (it
-// is opt-out via robots and does not affect Search ranking either way), and
-// GPTBot governs ChatGPT's. The point of this site is that a person - or
-// something answering on their behalf - can find out what Yanir works on, so
-// blocking the crawlers that field that question would defeat it.
-const ASSISTANT_CRAWLERS = [
-    'GPTBot',
+// The AI crawlers split in two, because being read and being trained on are
+// different things and this site wants one without the other.
+//
+// ANSWER_TIME_CRAWLERS fetch a page in order to answer a question somebody is
+// asking right now, and cite it back. They are the entire reason the JSON-LD
+// and llms.txt exist: when a person asks an assistant who Yanir is, these are
+// what go and look.
+//
+// TRAINING_CRAWLERS collect pages into corpora that models are trained on.
+// Nothing about that helps a reader find him, and ingestion is irreversible.
+//
+// These lists are not a preference stated in a vacuum - they mirror what
+// Cloudflare actually enforces on the zone, where the AI Crawler category is
+// blocked at the network layer and the AI Search and AI Assistant categories
+// are not. A robots.txt that disagreed with that enforcement would be
+// published policy the site does not honour, which is worse than either
+// choice made honestly.
+//
+// Two entries are directives rather than fetchers: Google-Extended and
+// Applebot-Extended have no crawler of their own, they only govern whether
+// Gemini and Apple Intelligence may use the content. They sit on the training
+// side for consistency. That has a real cost - Google-Extended also gates
+// Gemini's grounding, so declining it means Gemini is less likely to cite the
+// site - and it is the one line here worth revisiting if being found through
+// Gemini specifically matters more than staying out of its training set.
+const ANSWER_TIME_CRAWLERS = [
     'OAI-SearchBot',
     'ChatGPT-User',
+    'Claude-SearchBot',
+    'PerplexityBot',
+    'Perplexity-User',
+    'DuckAssistBot',
+    'MistralAI-User',
+    'Applebot',
+    'Googlebot',
+    'Bingbot',
+] as const;
+
+const TRAINING_CRAWLERS = [
+    'GPTBot',
     'ClaudeBot',
+    'Claude-User',
     'anthropic-ai',
     'Claude-Web',
-    'PerplexityBot',
+    'CCBot',
+    'Bytespider',
+    'Amazonbot',
+    'Meta-ExternalAgent',
+    'Google-CloudVertexBot',
     'Google-Extended',
     'Applebot-Extended',
-    'Bingbot',
 ] as const;
 
 /**
@@ -67,16 +100,90 @@ const ASSISTANT_CRAWLERS = [
  * crawlers read an unparseable robots.txt as "allow everything", but LinkedIn
  * and Facebook fetch it before reading the link-preview tags.
  */
-const emitDiscoveryFiles = (siteUrl: string) => ({
+/**
+ * The response headers Cloudflare Pages applies to every route, built here for
+ * the same reason as the files above: the Content-Security-Policy has to name
+ * the backend's origin in `connect-src`, and that origin is injected at build
+ * time. A committed static `_headers` could only hardcode it, and a CSP that
+ * disagrees with the deployed backend URL breaks every request the chat makes.
+ *
+ * Notes on the specific choices, since a CSP is easy to copy and hard to read:
+ *
+ *   script-src 'self'   No 'unsafe-inline'. The JSON-LD block in index.html is
+ *                       a data block, not executable script - the HTML parser
+ *                       never prepares it for execution, so CSP does not gate
+ *                       it and structured data survives the strict policy.
+ *   style-src           'unsafe-inline' is required: three components set a
+ *                       `style` attribute to pass a CSS custom property, and
+ *                       style attributes are inline styles as far as CSP cares.
+ *   img-src             'self' covers the avatar's committed fallback. When
+ *                       VITE_AVATAR_URL points at an external host, that host's
+ *                       origin is added rather than opening img-src to https:.
+ *   frame-ancestors     'none' stops the site being framed - clickjacking cover
+ *                       that X-Frame-Options duplicates for older agents.
+ *
+ * No Cross-Origin-Resource-Policy: it would restrict who may load og-image.png,
+ * and a link-preview card is precisely a cross-origin consumer of that file.
+ *
+ * HSTS carries includeSubDomains but deliberately not `preload`. Preloading is
+ * baked into browser binaries and takes months to reverse, so it should be a
+ * decision made once the domain's subdomain plans are settled, not a default
+ * inherited from a config file.
+ */
+const emitSecurityHeaders = (backendUrl: string, avatarUrl: string) => {
+    const originOf = (u: string) => {
+        try {
+            return new URL(u).origin;
+        } catch {
+            return '';
+        }
+    };
+    const connectSrc = ["'self'", originOf(backendUrl)].filter(Boolean).join(' ');
+    const imgSrc = ["'self'", 'data:', originOf(avatarUrl)].filter(Boolean).join(' ');
+
+    const csp = [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "object-src 'none'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "font-src 'self'",
+        `img-src ${imgSrc}`,
+        `connect-src ${connectSrc}`,
+        'upgrade-insecure-requests',
+    ].join('; ');
+
+    return [
+        '/*',
+        `  Content-Security-Policy: ${csp}`,
+        '  Strict-Transport-Security: max-age=31536000; includeSubDomains',
+        '  X-Content-Type-Options: nosniff',
+        '  X-Frame-Options: DENY',
+        '  Referrer-Policy: strict-origin-when-cross-origin',
+        '  Cross-Origin-Opener-Policy: same-origin',
+        '  Permissions-Policy: accelerometer=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()',
+        '',
+    ].join('\n');
+};
+
+const emitDiscoveryFiles = (siteUrl: string, backendUrl: string, avatarUrl: string) => ({
     name: 'emit-discovery-files',
     generateBundle() {
         const robots = [
-            '# Everything here is public by design, so nothing is disallowed.',
+            '# Every page here is public, and the crawlers that answer questions on a',
+            "# reader's behalf are welcome. The ones that collect pages into training",
+            '# corpora are not, and Cloudflare enforces that on the zone as well - this',
+            '# file states the same policy rather than a more generous one.',
             '',
             'User-agent: *',
             'Allow: /',
             '',
-            ...ASSISTANT_CRAWLERS.flatMap((ua) => [`User-agent: ${ua}`, 'Allow: /', '']),
+            '# Fetch a page to answer a question someone is asking now.',
+            ...ANSWER_TIME_CRAWLERS.flatMap((ua) => [`User-agent: ${ua}`, 'Allow: /', '']),
+            '# Collect pages for model training.',
+            ...TRAINING_CRAWLERS.flatMap((ua) => [`User-agent: ${ua}`, 'Disallow: /', '']),
             `Sitemap: ${siteUrl}/sitemap.xml`,
             '',
         ].join('\n');
@@ -144,6 +251,7 @@ const emitDiscoveryFiles = (siteUrl: string) => ({
             ['robots.txt', robots],
             ['sitemap.xml', sitemap],
             ['llms.txt', llms],
+            ['_headers', emitSecurityHeaders(backendUrl, avatarUrl)],
         ] as const) {
             this.emitFile({ type: 'asset', fileName, source });
         }
@@ -198,7 +306,7 @@ export default defineConfig(({ mode, command }) => {
                     handler: (html: string) => html.replaceAll('%VITE_SITE_URL%', resolvedSiteUrl),
                 },
             },
-            emitDiscoveryFiles(resolvedSiteUrl),
+            emitDiscoveryFiles(resolvedSiteUrl, resolvedBackendUrl, env.VITE_AVATAR_URL || ''),
         ],
         server: {
             port: 3000,

@@ -164,6 +164,21 @@ jobs:
           # inside the quoted value preserves the next line's indentation, so
           # every item after the first arrived with ~26 leading spaces in its
           # key.
+          #
+          # --service-account is the identity the container RUNS as, and it is
+          # deliberately not the identity that deploys it. github-deployer holds
+          # run.admin, artifactregistry.writer, secretmanager.secretAccessor and
+          # iam.serviceAccountUser because deploying needs them. Running the
+          # container as that account would hand all four to anyone who achieved
+          # code execution inside it - the metadata server will mint a token for
+          # whatever the service runs as, so an SSRF or RCE in the chat path
+          # would have been enough to redeploy the service, push images, and
+          # read every secret in the project. GCP_RUNTIME_SA can read the two
+          # secrets on the --set-secrets line and nothing else.
+          #
+          # It is a variable rather than a secret because a service account
+          # email is an identifier, not a credential; the deploy is authorised
+          # by Workload Identity Federation, which is scoped to this repository.
           gcloud run deploy backend \
             --source . \
             --platform managed \
@@ -175,7 +190,7 @@ jobs:
             --max-instances=4 \
             --memory=512Mi \
             --timeout=300 \
-            --service-account=${{ secrets.GCP_SA_EMAIL }} \
+            --service-account=${{ vars.GCP_RUNTIME_SA }} \
             --set-env-vars="^|^ENVIRONMENT=${{ env.ENVIRONMENT }}|EMAIL_ADDRESS=${{ secrets.EMAIL_ADDRESS }}|YOUR_EMAIL=${{ secrets.YOUR_EMAIL }}|ALLOWED_ORIGINS=${{ vars.ALLOWED_ORIGINS }}" \
             --set-secrets="GEMINI_API_KEY=gemini-api-key:latest,EMAIL_PASSWORD=email-password:latest" \
             --labels="managed-by=github-actions,commit-sha=${{ github.sha }}" \
