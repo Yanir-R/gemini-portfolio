@@ -24,6 +24,132 @@ const DEFAULT_SITE_URL = {
     development: 'http://localhost:3000',
 } as const;
 
+// Routes the router serves from the bundle. Detail pages (/projects/:slug,
+// /blog/:slug) are deliberately absent: their slugs come from the backend at
+// runtime, so nothing at build time knows them. Fetching the API here would
+// make every deploy depend on the backend being up, and a sitemap silently
+// truncated by a failed request is worse than one that never claimed to be
+// complete. Listing the index pages lets a crawler reach the detail pages by
+// following links instead.
+const STATIC_ROUTES = ['/', '/about', '/projects', '/blog'] as const;
+
+// Crawlers named individually in robots.txt. A blanket `User-agent: *` already
+// permits them, but two treat an explicit entry as the deciding signal:
+// Google-Extended governs whether Gemini and AI Overviews may use the page (it
+// is opt-out via robots and does not affect Search ranking either way), and
+// GPTBot governs ChatGPT's. The point of this site is that a person - or
+// something answering on their behalf - can find out what Yanir works on, so
+// blocking the crawlers that field that question would defeat it.
+const ASSISTANT_CRAWLERS = [
+    'GPTBot',
+    'OAI-SearchBot',
+    'ChatGPT-User',
+    'ClaudeBot',
+    'anthropic-ai',
+    'Claude-Web',
+    'PerplexityBot',
+    'Google-Extended',
+    'Applebot-Extended',
+    'Bingbot',
+] as const;
+
+/**
+ * robots.txt, sitemap.xml and llms.txt, emitted rather than committed.
+ *
+ * All three have to state absolute URLs - the sitemap protocol requires them,
+ * and a robots `Sitemap:` line is ignored without one - so none can be a static
+ * file in public/ without hardcoding a host, which is the thing this config
+ * exists to prevent. They are generated from the same resolved site URL that
+ * fills in the canonical and OpenGraph tags, so there is one host to change.
+ *
+ * robots.txt additionally has to exist as a real file because `_redirects` maps
+ * `/*` to index.html: without it, /robots.txt answers with the SPA shell. Most
+ * crawlers read an unparseable robots.txt as "allow everything", but LinkedIn
+ * and Facebook fetch it before reading the link-preview tags.
+ */
+const emitDiscoveryFiles = (siteUrl: string) => ({
+    name: 'emit-discovery-files',
+    generateBundle() {
+        const robots = [
+            '# Everything here is public by design, so nothing is disallowed.',
+            '',
+            'User-agent: *',
+            'Allow: /',
+            '',
+            ...ASSISTANT_CRAWLERS.flatMap((ua) => [`User-agent: ${ua}`, 'Allow: /', '']),
+            `Sitemap: ${siteUrl}/sitemap.xml`,
+            '',
+        ].join('\n');
+
+        const sitemap = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+            ...STATIC_ROUTES.map(
+                (route) =>
+                    `    <url><loc>${siteUrl}${route}</loc>` +
+                    `<priority>${route === '/' ? '1.0' : '0.8'}</priority></url>`
+            ),
+            '</urlset>',
+            '',
+        ].join('\n');
+
+        // llms.txt is a convention, not a standard: a plain-prose summary at a
+        // predictable path for an assistant that has fetched the site and found
+        // an empty <div id="root">. It says what the rendered pages say, which
+        // is the only thing that makes it worth serving - a summary that drifts
+        // from the site is a liability, so it is deliberately short enough to
+        // keep true.
+        const llms = [
+            '# Yanir Rot - Full-Stack AI Engineer',
+            '',
+            '> Portfolio and AI assistant. The assistant answers questions about Yanir Rot',
+            "> from his own notes and project write-ups, and says so when they don't cover",
+            '> the question rather than guessing.',
+            '',
+            '## About',
+            '',
+            'Yanir Rot works on the half of AI engineering that starts after the demo works.',
+            'Since 2025 he has been building a multi-agent system that investigates production',
+            'incidents: agents reading Kubernetes, AWS and observability telemetry, then writing',
+            'up what actually broke. He owns whether the pipeline is right - where a citation',
+            'comes from, why a model would fake one, and what a single question costs. From 2018',
+            'to 2025 he did frontend and full-stack work, including a sports betting platform at',
+            '500K daily users and finance applications for Israeli enterprises.',
+            '',
+            'Works across React, TypeScript, Python, FastAPI, Kubernetes and AWS.',
+            '',
+            '## Pages',
+            '',
+            ...STATIC_ROUTES.map(
+                (route) =>
+                    `- [${
+                        {
+                            '/': 'Home',
+                            '/about': 'About',
+                            '/projects': 'Projects',
+                            '/blog': 'Writing',
+                        }[route]
+                    }](${siteUrl}${route})`
+            ),
+            '',
+            '## Elsewhere',
+            '',
+            '- [GitHub](https://github.com/Yanir-R)',
+            '- [LinkedIn](https://www.linkedin.com/in/yanirrot/)',
+            '- Email: rotyanir@gmail.com',
+            '',
+        ].join('\n');
+
+        for (const [fileName, source] of [
+            ['robots.txt', robots],
+            ['sitemap.xml', sitemap],
+            ['llms.txt', llms],
+        ] as const) {
+            this.emitFile({ type: 'asset', fileName, source });
+        }
+    },
+});
+
 export default defineConfig(({ mode, command }) => {
     // loadEnv reads .env files and also picks up prefixed process env vars,
     // which is how CI injects these.
@@ -72,6 +198,7 @@ export default defineConfig(({ mode, command }) => {
                     handler: (html: string) => html.replaceAll('%VITE_SITE_URL%', resolvedSiteUrl),
                 },
             },
+            emitDiscoveryFiles(resolvedSiteUrl),
         ],
         server: {
             port: 3000,

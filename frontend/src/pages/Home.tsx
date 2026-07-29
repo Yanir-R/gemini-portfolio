@@ -4,9 +4,9 @@ import Chat from '@/components/Chat';
 /*
  * The hero is the page's thesis, not a greeting.
  *
- * It previously read "Welcome to Yanir.dev - feel free to explore and interact
- * with my AI assistant below", which told a visitor the domain name and that a
- * chatbot existed. Neither is why anyone is here.
+ * It previously opened by naming the site and announcing that an AI assistant
+ * sat below it. Neither is why anyone is here, and the domain it named is not
+ * one this project owns - the site is served from its Pages subdomain.
  *
  * The second line does real work: it sets the expectation that the assistant
  * will decline questions the corpus does not cover, so a decline reads as the

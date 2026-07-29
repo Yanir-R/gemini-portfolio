@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<!--
+  Source for public/og-image.png, the link-preview card LinkedIn, Slack and
+  iMessage render in place of the URL.
+
+  It lives here as HTML rather than only as a PNG because a committed binary
+  with no source rots: the next person to change the headline has no way to
+  reproduce the card and leaves the image contradicting the page. Regenerate
+  with headless Chrome, from this directory:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
+      --window-size=1200,630 --screenshot=../public/og-image.png \
+      "file://$PWD/og-image.html"
+
+  1200x630 is not arbitrary - it clears LinkedIn's 1200x627 minimum at the
+  1.91:1 ratio every platform crops to. Colours and the serif/mono split are
+  read off tailwind.config.js by hand; this file is outside the Tailwind build,
+  so a palette change there has to be mirrored here.
+
+  The copy is the page's own h1 and standfirst. Keep it that way: a preview that
+  promises something the page does not say is the one kind of error the reader
+  notices before they arrive.
+-->
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: #0B0F12;
+    color: #D9E1E6;
+    font-family: Charter, 'Iowan Old Style', Georgia, serif;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 88px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .eyebrow {
+    font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
+    font-size: 17px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #75868F;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #5FD3A0; }
+  h1 {
+    margin-top: 30px;
+    font-size: 62px;
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+    max-width: 940px;
+  }
+  .sub {
+    margin-top: 26px;
+    font-size: 25px;
+    line-height: 1.5;
+    color: #75868F;
+    max-width: 880px;
+  }
+  .rule { margin-top: 44px; height: 1px; background: #1F2B34; }
+  .foot {
+    margin-top: 22px;
+    font-family: 'SF Mono', SFMono-Regular, Menlo, monospace;
+    font-size: 17px;
+    color: #75868F;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+  <div class="eyebrow"><span class="dot"></span>Yanir Rot &middot; Full-Stack AI Engineer</div>
+  <h1>I build AI products end to end, then make them trustworthy. That&rsquo;s the harder half.</h1>
+  <p class="sub">Ask the assistant about the work. It answers from what I have written down, and says so when that is not enough.</p>
+  <div class="rule"></div>
+  <div class="foot"><span>React &middot; TypeScript &middot; Python &middot; LLM systems</span></div>
+</body>
+</html>
