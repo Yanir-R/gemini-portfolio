@@ -13,27 +13,9 @@ it is an outage, and nothing in the code distinguished the two.
 
 import time
 
-import pytest
-from google.genai import errors as genai_errors
-
 import gemini_helper
+from conftest import ApiError
 from gemini_helper import BUSY_MESSAGE
-
-
-class _Refusal(genai_errors.APIError):
-    """An APIError carrying a status code, built without the SDK constructor.
-
-    test_context_layer builds these as `APIError(code, {...})`, which depends on
-    the shape of the SDK's own __init__ and breaks across versions - it is why
-    two tests in that file fail on an older local SDK while passing in CI.
-    Setting the one attribute the code under test reads keeps this independent
-    of that.
-    """
-
-    def __init__(self, code: int):
-        self.code = code
-        self.message = "quota"
-        Exception.__init__(self, f"{code} quota")
 
 
 class _Refusing:
@@ -46,7 +28,7 @@ class _Refusing:
 
     def generate_content(self, model, contents, config):
         self.calls.append(model)
-        raise _Refusal(self.status)
+        raise ApiError(self.status, "quota")
 
 
 # Cooldown state is reset for every test by tests/conftest.py.
@@ -159,7 +141,7 @@ def test_a_slow_chain_stops_at_the_deadline_rather_than_multiplying_the_wait(mon
                 "monotonic",
                 lambda: base + gemini_helper.TOTAL_DEADLINE_SECONDS + 1,
             )
-            raise _Refusal(503)
+            raise ApiError(503, "slow")
 
     slow = _Slow()
     slow.models = slow

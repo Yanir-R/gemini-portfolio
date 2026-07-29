@@ -18,8 +18,28 @@ is the point: the next person to add a test should not have to know this exists.
 """
 
 import pytest
+from google.genai import errors as genai_errors
 
 import gemini_helper
+
+
+class ApiError(genai_errors.APIError):
+    """An APIError carrying a status code, without an HTTP response object.
+
+    Built by setting the one attribute the code under test reads, rather than
+    by calling the SDK's constructor. The constructor form -
+    `APIError(code, {...})` - depends on the shape of the SDK's own __init__,
+    which changed: on some versions it parses the dict as an HTTP response and
+    raises `AttributeError: 'dict' object has no attribute 'body_segments'`
+    before a test reaches its assertion. That made two tests in this suite fail
+    for a reason unrelated to what they check, and a test failing for the wrong
+    reason has stopped protecting anything.
+    """
+
+    def __init__(self, code: int, message: str = "test"):
+        self.code = code
+        self.message = message
+        Exception.__init__(self, f"{code} {message}")
 
 
 @pytest.fixture(autouse=True)
