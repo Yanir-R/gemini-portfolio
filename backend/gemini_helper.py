@@ -15,6 +15,8 @@ from google.genai import errors as genai_errors
 from google.genai import types
 from typing import Dict, Iterable, Optional
 import logging
+import threading
+import time
 
 from context import Knowledge
 from prompt import NO_KNOWLEDGE_MESSAGE, build_contents, build_system_instruction
@@ -35,6 +37,46 @@ MODELS = (
 # candidate is worth trying: retired/unknown model, exhausted quota, or a
 # transient server-side failure.
 RETRYABLE_STATUS_CODES = frozenset({404, 429, 500, 502, 503, 504})
+
+# How long one upstream call may take before it is abandoned. The SDK counts in
+# milliseconds. Generous enough for a slow answer, short enough that three
+# sequential attempts cannot outlive a visitor's patience or Cloud Run's own
+# 300s request ceiling.
+REQUEST_TIMEOUT_MS = 20_000
+
+# How long a model is left alone after it refuses.
+#
+# Without this, every request re-attempted every exhausted model and paid the
+# round-trip to be told "no" again - which is how a spent daily quota turned
+# into queued requests and a starved service rather than a fast, honest "I'm
+# getting more questions than I can keep up with".
+#
+# Deliberately short, and deliberately not parsed from the quota metadata. A
+# 429 may mean the per-minute burst or the per-day allowance, and distinguishing
+# them means reading a quotaId string out of an error body that Google is free
+# to reword. A minute of cooldown is right for the transient case and, for an
+# exhausted day, costs one wasted call a minute instead of one per request.
+MODEL_COOLDOWN_SECONDS = 60
+
+# model id -> monotonic time before which it should not be tried again.
+_model_cooldowns: Dict[str, float] = {}
+_cooldown_lock = threading.Lock()
+
+
+def _model_is_cooling(model_id: str, now: float) -> bool:
+    with _cooldown_lock:
+        until = _model_cooldowns.get(model_id)
+        if until is None:
+            return False
+        if now >= until:
+            del _model_cooldowns[model_id]
+            return False
+        return True
+
+
+def _start_cooldown(model_id: str, now: float) -> None:
+    with _cooldown_lock:
+        _model_cooldowns[model_id] = now + MODEL_COOLDOWN_SECONDS
 
 # Low but not zero: answers should be stable and factual across reloads, while
 # still reading as conversation rather than a canned response.
@@ -103,7 +145,19 @@ def get_gemini_response(
         logger.error("Refusing to answer: knowledge corpus is empty")
         return NO_KNOWLEDGE_MESSAGE
 
-    client = genai.Client(api_key=api_key)
+    # A ceiling on how long one upstream call may hold a worker.
+    #
+    # There was none, and it mattered more than it looks. Cloud Run runs at most
+    # four instances, each a single uvicorn process, so a handful of calls that
+    # hang occupy the whole service - and when the daily quota ran out, requests
+    # queued behind three sequential model attempts until endpoints that never
+    # touch Gemini, /api/chat/status among them, started timing out too. The
+    # chat being unavailable is a degradation; taking the rest of the site with
+    # it is an outage, and nothing in the code prevented that.
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS),
+    )
     config = types.GenerateContentConfig(
         system_instruction=build_system_instruction(knowledge),
         temperature=TEMPERATURE,
@@ -112,7 +166,17 @@ def get_gemini_response(
     contents = build_contents(user_question, conversation_history)
 
     last_error: Optional[Exception] = None
+    skipped_all = True
     for model_id in MODELS:
+        # A model that just refused is skipped without a call. Asking again
+        # inside the cooldown buys nothing and costs the round-trip, which is
+        # the whole reason an exhausted quota was able to queue requests up
+        # behind it.
+        if _model_is_cooling(model_id, time.monotonic()):
+            logger.info("Skipping %s: still cooling down after a recent refusal", model_id)
+            continue
+
+        skipped_all = False
         try:
             response = client.models.generate_content(
                 model=model_id,
@@ -150,6 +214,11 @@ def get_gemini_response(
             status_code = e.code if isinstance(e, genai_errors.APIError) else None
 
             if status_code in RETRYABLE_STATUS_CODES:
+                # Rate limiting and exhausted quota are the cases worth
+                # remembering. A 404 means the model is retired, which no
+                # cooldown fixes, and a 5xx is usually a one-off.
+                if status_code == 429:
+                    _start_cooldown(model_id, time.monotonic())
                 logger.warning(
                     "Model %s unavailable (HTTP %s), trying next model", model_id, status_code
                 )
@@ -158,6 +227,14 @@ def get_gemini_response(
             # Anything else (auth, malformed request, network) is not a
             # model-availability problem, so trying another model won't help.
             return _failure_message(e)
+
+    if skipped_all:
+        # Every model was still cooling down, so nothing was even attempted.
+        # That is the busy case by definition, and saying so immediately is the
+        # point of the cooldown - the visitor gets an honest answer in
+        # milliseconds instead of waiting out three refusals.
+        logger.warning("All models cooling down; answering busy without calling upstream")
+        return BUSY_MESSAGE
 
     # Every candidate model failed; report the category of the last failure.
     return _failure_message(last_error)
