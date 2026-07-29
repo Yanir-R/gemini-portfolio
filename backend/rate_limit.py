@@ -132,13 +132,38 @@ class SlidingWindowLimiter:
 def client_key(request: Request) -> str:
     """Identifies the caller for per-client limiting.
 
-    Uses the LAST X-Forwarded-For entry, not the first. Proxies append the peer
-    they received from, so on Cloud Run the trailing entry is the one Google's
-    front end added and is the only part a client cannot forge - a request
-    carrying a handcrafted `X-Forwarded-For: 1.2.3.4` arrives as
+    Two cases, because the API can be reached two ways and the trustworthy
+    identifier is different in each.
+
+    Through the Cloudflare Worker, CF-Connecting-IP carries the real visitor and
+    is used - but only when the request proved it came through the edge by
+    presenting the shared secret, which main.py records as
+    `request.state.edge_verified`. On its own that header means nothing: anyone
+    talking to the origin directly can invent one. The proof is what makes it
+    usable, so the two mechanisms are deliberately coupled.
+
+    Without that proof, the LAST X-Forwarded-For entry, not the first. Proxies
+    append the peer they received from, so on Cloud Run the trailing entry is
+    the one Google's front end added and is the only part a client cannot forge
+    - a request carrying a handcrafted `X-Forwarded-For: 1.2.3.4` arrives as
     "1.2.3.4, <real client>". Reading the first entry would let anyone reset
     their own bucket at will.
+
+    That trailing-entry rule was right when clients reached Cloud Run directly,
+    and putting the Worker in front silently broke it: Google's front end then
+    sees a Cloudflare edge address, so every visitor collapsed onto one key and
+    the per-IP budget became a budget shared by everyone behind that PoP -
+    strangers rate-limiting each other while the limit that was supposed to stop
+    abuse stopped working. Hence the first branch.
     """
+    if getattr(request.state, "edge_verified", False):
+        cf_connecting_ip = request.headers.get("cf-connecting-ip", "").strip()
+        if cf_connecting_ip:
+            return cf_connecting_ip
+        # Fall through rather than fail closed. If the header ever stops
+        # arriving, sharing a bucket is a degradation; refusing service is an
+        # outage.
+
     forwarded = request.headers.get("x-forwarded-for", "")
     if forwarded:
         parts = [part.strip() for part in forwarded.split(",") if part.strip()]

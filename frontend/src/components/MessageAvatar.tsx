@@ -59,7 +59,12 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({ type }) => {
                 aria-hidden="true"
                 width={32}
                 height={32}
-                loading="lazy"
+                // Not lazy. This sits in the first screenful of every visit, so
+                // deferring it saves no bandwidth and delays the one image on
+                // the page. It also makes the avatar measurably slower to
+                // appear than the text beside it, which reads as a broken
+                // image rather than a pending one.
+                loading="eager"
                 onError={() => {
                     avatarKnownBroken = true;
                     setPhotoFailed(true);

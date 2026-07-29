@@ -58,11 +58,15 @@ jobs:
 
       - name: Build
         working-directory: ${{ env.FRONTEND_DIR }}
-        # Compile check only — this artifact is never deployed, so it runs
-        # without the deploy-time URLs. The flag keeps vite.config's guard from
-        # rejecting a deliberately unconfigured build.
-        env:
-          VITE_ALLOW_UNCONFIGURED_BUILD: 'true'
+        # Compile check only — this artifact is never deployed.
+        #
+        # It used to set VITE_ALLOW_UNCONFIGURED_BUILD because the URLs arrived
+        # from repository secrets that this job deliberately does not have, so
+        # vite.config's guard would have failed it. They come from
+        # site.config.ts now, which is checked out with the code, so the guard
+        # is satisfied here for the same reason it is satisfied in the deploy —
+        # and leaving the flag would have kept announcing "this build is
+        # deliberately unconfigured" about a build that is fully configured.
         run: npm run build
 
       - name: Audit dependencies

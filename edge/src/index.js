@@ -45,19 +45,32 @@ export default {
         headers.delete('x-edge-auth');
         headers.set('X-Edge-Auth', env.EDGE_SECRET);
 
-        const response = await fetch(
-            new Request(target, {
-                method: request.method,
-                headers,
-                body: request.body,
-                redirect: 'manual',
-            })
-        );
-
-        // Returned as-is. The backend already emits the CORS headers the
-        // browser needs, including the exposed Retry-After the frontend reads
-        // to tell a visitor how long a rate limit lasts; rewriting any of that
-        // here would only create a second place for it to drift.
-        return response;
+        try {
+            // Returned as-is. The backend already emits the CORS headers the
+            // browser needs, including the exposed Retry-After the frontend
+            // reads to tell a visitor how long a rate limit lasts; rewriting
+            // any of that here would only create a second place for it to
+            // drift.
+            return await fetch(
+                new Request(target, {
+                    method: request.method,
+                    headers,
+                    body: request.body,
+                    redirect: 'manual',
+                })
+            );
+        } catch (err) {
+            // The origin is unreachable, or took too long. Without this the
+            // rejection escapes and Cloudflare answers with its own 1101 error
+            // page - an HTML block the frontend cannot parse, arriving with no
+            // CORS headers, so the browser reports it as a CORS failure and the
+            // chat's "could not reach my notes" path never runs. A plain 502
+            // is a status the caller can actually act on.
+            console.error('origin fetch failed', err);
+            return new Response(JSON.stringify({ detail: 'Bad gateway' }), {
+                status: 502,
+                headers: { 'content-type': 'application/json' },
+            });
+        }
     },
 };

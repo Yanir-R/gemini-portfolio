@@ -236,6 +236,17 @@ _UNGUARDED_PATHS = frozenset({"/", "/health"})
 
 @app.middleware("http")
 async def require_edge_secret(request: Request, call_next):
+    # Whether this request is *proven* to have arrived through our Cloudflare
+    # Worker. Only a valid secret establishes that, so it starts false and is
+    # never assumed - when the secret is unset the API is reachable directly and
+    # nothing about the forwarding chain can be trusted.
+    #
+    # rate_limit.client_key reads this to decide whether CF-Connecting-IP is
+    # believable. That header is trivially forgeable by anyone talking to the
+    # origin, and worthless on its own; it is only meaningful once the request
+    # has proved it came through the edge that set it.
+    request.state.edge_verified = False
+
     if ORIGIN_SHARED_SECRET and request.url.path not in _UNGUARDED_PATHS:
         # Preflights never carry custom headers - the browser sends them to ask
         # whether the real request may. Rejecting them here would break CORS
@@ -250,6 +261,7 @@ async def require_edge_secret(request: Request, call_next):
                     "Rejected request to %s without a valid edge secret", request.url.path
                 )
                 return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+            request.state.edge_verified = True
     return await call_next(request)
 
 
