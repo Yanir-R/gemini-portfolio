@@ -1,6 +1,6 @@
 # "Nothing found."
 
-Oh really? Nothing? The tool crashed, the data is empty, *and* the thing doesn't exist — all at the same time? That's impressive.
+Oh really? Nothing? The tool crashed, the data is empty, *and* the thing doesn't exist, all at the same time? That's impressive.
 
 That's like telling someone "I didn't find your car" without mentioning the parking lot was on fire.
 

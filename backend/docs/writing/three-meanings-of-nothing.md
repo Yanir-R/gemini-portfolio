@@ -72,7 +72,7 @@ We built each of these layers because the one before it wasn't enough. Fixing th
 
 ## What we learned
 
-1. **Most agent errors aren't errors at all** — they're valid empty responses being misclassified.
+1. **Most agent errors aren't errors at all**: they're valid empty responses being misclassified.
 2. **Auth failures should be session-scoped.** Once authentication breaks, every subsequent tool call will also break. Block them all immediately instead of wasting tokens.
 3. **"Not found" is a finding, not a problem.** An agent that confidently says "this doesn't exist" is more valuable than one that keeps searching forever.
 4. **Structured signals beat natural language parsing.** Don't try to regex-match error messages. Return typed, structured classifications from every tool.
@@ -86,7 +86,7 @@ When a tool returns nothing, does your system know which nothing it got?
 article
 
 ## Source
-Dalton blog
+Engineering blog
 
 ## URL
 https://daltonhq.ai/blog/three-meanings-of-nothing

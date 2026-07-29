@@ -65,9 +65,9 @@ const Blog: React.FC = () => {
                     Things I worked out in public.
                 </h1>
                 <p className="mt-3 leading-relaxed text-muted">
-                    Published on LinkedIn and the Dalton blog, reproduced here in full with a link
-                    to the original. Each one is also part of what the assistant on the home page
-                    answers from, so you can read it here or ask about it there.
+                    Published on LinkedIn, Medium and an engineering blog, reproduced here in full
+                    with a link to each original. Every piece is also part of what the assistant on
+                    the home page answers from, so you can read it here or ask about it there.
                 </p>
             </header>
 

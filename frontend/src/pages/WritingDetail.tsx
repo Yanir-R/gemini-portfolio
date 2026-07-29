@@ -170,7 +170,15 @@ const WritingDetail: React.FC = () => {
 
             <footer className="pt-6 mt-12 border-t border-border">
                 <p className="text-sm leading-relaxed text-muted">
-                    Originally published on {entry.source}.{' '}
+                    {/* "LinkedIn" and "Medium" are proper nouns and read
+                        correctly straight after "on". A descriptive label like
+                        "Engineering blog" needs an article in front of it to
+                        scan as English. */}
+                    Originally published on{' '}
+                    {/blog/i.test(entry.source)
+                        ? `the ${entry.source.toLowerCase()}`
+                        : entry.source}
+                    .{' '}
                     <a
                         href={entry.url}
                         target="_blank"

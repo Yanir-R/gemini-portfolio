@@ -14,7 +14,7 @@ Nail those three and the whole thing works. Miss one and it confidently drives i
 
 And throwing a bigger model at the busywork? Doesn't help with any of it, you're just burning your daily limit to read files faster.
 
-So here's what Anthropic shipped 🥁 the **advisor tool** — and it's clever.
+So here's what Anthropic shipped 🥁 the **advisor tool**, and it's clever.
 
 **The idea:** your cheap model, Sonnet or Haiku, runs the whole task:
 
