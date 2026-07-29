@@ -100,17 +100,37 @@ const Blog: React.FC = () => {
                         <li key={entry.slug} className="border-b border-border">
                             <Link
                                 to={`/blog/${entry.slug}`}
-                                className="grid gap-1 items-baseline py-5 transition-colors duration-200 group sm:grid-cols-[7.5rem_1fr] sm:gap-x-5"
+                                className="grid gap-1.5 py-5 transition-colors duration-200 group sm:grid-cols-[7.5rem_1fr] sm:gap-x-5"
                             >
-                                <div className="flex gap-2.5 items-center">
+                                {/* Date and kind both live in the meta column, so
+                                    the badge starts at the same x on every row.
+
+                                    It used to sit inline after the title, which
+                                    meant its position was decided by where the
+                                    title happened to stop - one card had it on
+                                    the first line, the next halfway across the
+                                    second. A chip that moves per row reads as an
+                                    accident rather than a column.
+
+                                    Stacked rather than side by side because the
+                                    date and the chip together are wider than the
+                                    7.5rem column; on mobile the grid collapses
+                                    and they sit on one line, where there is room. */}
+                                <div className="flex gap-2.5 items-center sm:flex-col sm:gap-1.5 sm:items-start">
+                                    {/* A minimum width only while the two sit on
+                                        one row: "6 Apr 2026" is narrower than
+                                        "24 Jun 2026", which nudged the badge a
+                                        few pixels per card. Released from `sm`,
+                                        where they stack and the date's width
+                                        stops mattering. */}
                                     <time
                                         dateTime={entry.date}
-                                        className="font-mono text-xs whitespace-nowrap text-muted"
+                                        className="min-w-[5.5rem] font-mono text-xs whitespace-nowrap sm:min-w-0 text-muted"
                                     >
                                         {formatDate(entry.date)}
                                     </time>
                                     <span
-                                        className={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider sm:hidden ${
+                                        className={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider ${
                                             WRITING_KIND_STYLE[entry.kind] ??
                                             'text-muted border-border'
                                         }`}
@@ -120,19 +140,9 @@ const Blog: React.FC = () => {
                                 </div>
 
                                 <div className="min-w-0">
-                                    <div className="flex flex-wrap gap-2.5 items-baseline">
-                                        <h2 className="text-lg font-semibold leading-snug transition-colors duration-200 text-content group-hover:text-signal">
-                                            {entry.title}
-                                        </h2>
-                                        <span
-                                            className={`hidden rounded border px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider sm:inline ${
-                                                WRITING_KIND_STYLE[entry.kind] ??
-                                                'text-muted border-border'
-                                            }`}
-                                        >
-                                            {WRITING_KIND_LABEL[entry.kind] ?? entry.kind}
-                                        </span>
-                                    </div>
+                                    <h2 className="text-lg font-semibold leading-snug transition-colors duration-200 text-content group-hover:text-signal">
+                                        {entry.title}
+                                    </h2>
 
                                     {entry.summary && (
                                         <p className="mt-1.5 text-sm leading-relaxed text-muted">

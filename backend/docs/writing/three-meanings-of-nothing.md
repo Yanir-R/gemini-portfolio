@@ -86,7 +86,7 @@ When a tool returns nothing, does your system know which nothing it got?
 article
 
 ## Source
-Engineering blog
+Company blog
 
 ## URL
 https://daltonhq.ai/blog/three-meanings-of-nothing
