@@ -21,3 +21,23 @@ export const CHAT_CONFIG = {
     INITIAL_MESSAGE:
         "Ask about the work, how it was built, or what went wrong. I answer from my notes and project write-ups, so if something isn't written down I'll say so rather than guess.",
 } as const;
+
+/*
+ * The home page standfirst, and the single source of the same sentence
+ * everywhere else it appears.
+ *
+ * It was previously written out by hand in five places - the page, three meta
+ * tags in index.html, and tools/og-image.html - and the page was the only one
+ * that got updated. The link preview then advertised a sentence the site no
+ * longer said, in the third person, on a site whose whole argument is that it
+ * answers in Yanir's own voice.
+ *
+ * index.html and og-image.html sit outside the module graph and cannot import
+ * this, so `npm run check:preview-copy` asserts they still match it and runs in
+ * CI. Change the sentence here, run `npm run check:preview-copy` to see what
+ * else needs updating, then regenerate the card per tools/og-image.html.
+ */
+export const SITE_COPY = {
+    STANDFIRST:
+        'The assistant answers as me, from my notes and project write-ups. When they don’t cover your question it says so rather than guessing.',
+} as const;
