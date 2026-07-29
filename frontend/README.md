@@ -7,16 +7,23 @@ React + TypeScript single-page app, built with Vite and deployed to Cloudflare P
 ```
 frontend/
 ├── public/
-│   └── _redirects        # SPA fallback: /* -> /index.html (deep links)
+│   ├── _redirects        # SPA fallback: /* -> /index.html (deep links)
+│   └── og-image.png      # link-preview card, generated from tools/og-image.html
+├── scripts/
+│   └── check-preview-copy.mjs   # CI: preview copy must match the page
 ├── src/
 │   ├── api/              # apiClient (base URL) + endpoints (relative paths)
 │   ├── components/
+│   ├── constants/        # SITE_COPY — the source of truth for page copy
 │   ├── hooks/
 │   ├── pages/
 │   ├── services/         # chatService, projectService
 │   └── types/
+├── tools/
+│   └── og-image.html     # source for public/og-image.png
 ├── .env.development
 ├── eslint.config.js
+├── site.config.ts        # public build values: site URL, backend URL, avatar
 └── vite.config.mts
 ```
 
@@ -48,7 +55,19 @@ npm run dev     # http://localhost:3000
 
 ## Configuration
 
-Both variables are **build-time**: Vite inlines them into the bundle, so changing one requires a rebuild, not a restart.
+The public build values live in **`site.config.ts`**, committed:
+
+```ts
+export const siteConfig = {
+    url: 'https://example.com',          // canonical, OpenGraph, sitemap, llms.txt
+    backendUrl: 'https://api.example.com', // every API call, and the CSP's connect-src
+    avatarUrl: '',                        // optional; empty renders an initial-letter mark
+};
+```
+
+Forking? Change those three. None is a secret — all three are readable from the deployed site — and committing them is what makes the deploy honest: Vite inlines them at build time, so a value held outside the repository only takes effect on the next build.
+
+Each can be overridden by an environment variable of the same name in upper snake case (`VITE_SITE_URL`, `VITE_BACKEND_URL`, `VITE_AVATAR_URL`), which is what local development uses:
 
 ```bash
 # frontend/.env.development
@@ -56,30 +75,39 @@ VITE_BACKEND_URL=http://localhost:8000
 VITE_SITE_URL=http://localhost:3000
 ```
 
-| Variable | Effect | If unset |
-| --- | --- | --- |
-| `VITE_BACKEND_URL` | Base URL for every API call | dev: `localhost:8000` · **production build fails** |
-| `VITE_SITE_URL` | Canonical + OpenGraph URLs in `index.html` | dev: `localhost:3000` · **production build fails** |
+The environment wins over the file, so CI deliberately sets none of them.
 
-There is deliberately **no production fallback**. A pinned default used to be the only reason production resolved correctly, which is exactly what hid the fact that CI's injected values were being discarded. A production build now stops with the missing variable named:
+There is **no production fallback** for `url` or `backendUrl`. If both the file and the environment leave one empty, a production build stops rather than shipping a bundle wired to localhost:
 
 ```
-Error: Production build is missing VITE_BACKEND_URL and VITE_SITE_URL.
+Error: Production build is missing backendUrl and url.
 ```
 
-`VITE_ALLOW_UNCONFIGURED_BUILD=true` opts out and substitutes the localhost values. CI `verify` sets it to compile without secrets; its artifact is never deployed. Do not set it on a build you intend to ship.
+`VITE_ALLOW_UNCONFIGURED_BUILD=true` opts out and substitutes the localhost values, for a deliberately config-less build. Nothing in CI sets it, and it must not be set on a build you intend to ship.
 
-`vite.config.mts` reads these via `loadEnv`, which also picks up process env vars — that is how CI injects them. Endpoint paths in `src/api/endpoints.ts` are **relative**; `apiClient` supplies the host, so there is only one place the backend origin is defined.
+`vite.config.mts` reads the overrides via `loadEnv`, which also picks up process env vars. Endpoint paths in `src/api/endpoints.ts` are **relative**; `apiClient` supplies the host, so there is only one place the backend origin is defined.
+
+### Generated files
+
+`vite.config.mts` emits these into `dist/` rather than committing them, because each needs the absolute site URL or backend origin:
+
+| File | Contents |
+| --- | --- |
+| `robots.txt` | Answer-time crawlers allowed, training crawlers disallowed, `Sitemap:` line |
+| `sitemap.xml` | The four static routes |
+| `llms.txt` | Plain-prose summary for assistants that do not run JavaScript |
+| `_headers` | Cloudflare Pages response headers, including the CSP that names the backend origin |
+| `build-info.json` | The site/backend URLs and commit this deployment was built from |
 
 ### Social preview image
 
-`og:image` / `twitter:image` are intentionally absent, and `twitter:card` is `summary`. Add `public/preview-image.jpg` (1200x630) and restore the tags to enable rich previews — advertising an image URL that 404s renders an empty card.
+`public/og-image.png` (1200x630) backs `og:image` and `twitter:image`, and `twitter:card` is `summary_large_image`. The source is `tools/og-image.html`; regenerate the PNG with the headless-Chrome command in that file's header whenever the headline changes. `npm run check:preview-copy` fails CI if the standfirst duplicated into `index.html` and `tools/og-image.html` drifts from the page's own copy.
 
 ## Deployment
 
-Pushing to `main` runs `verify` (typecheck, lint, format, build, `npm audit`) and then deploys to Cloudflare Pages via `wrangler pages deploy`. Pull requests run `verify` only.
+Pushing to `main` runs `verify` (typecheck, lint, format, preview-copy check, build, `npm audit`) and then deploys to Cloudflare Pages via `wrangler pages deploy`. Pull requests run `verify` only.
 
-The Pages project uses **Direct Upload**, not Git integration: GitHub Actions builds with the right build-time env and uploads the result. Do **not** set `VITE_*` variables in the Cloudflare dashboard — with Direct Upload, Cloudflare never builds, so anything set there is silently ignored.
+The Pages project uses **Direct Upload**, not Git integration: GitHub Actions builds and uploads `dist/`. Do **not** set `VITE_*` variables in the Cloudflare dashboard — with Direct Upload, Cloudflare never builds, so anything set there is ignored. Change `site.config.ts` and commit instead.
 
 The deploy job is dormant until the `CLOUDFLARE_PAGES_ENABLED` repository variable is `true`.
 
@@ -89,7 +117,7 @@ The deploy job is dormant until the `CLOUDFLARE_PAGES_ENABLED` repository variab
 
 ## API integration
 
-All calls go through `apiClient` (`src/api/client.ts`), which sets `baseURL` from `VITE_BACKEND_URL`:
+All calls go through `apiClient` (`src/api/client.ts`), whose `baseURL` is the resolved `backendUrl` — in production the Cloudflare Worker in [`edge/`](../edge/README.md), which forwards to Cloud Run:
 
 | Path | Used by |
 | --- | --- |

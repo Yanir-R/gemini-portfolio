@@ -110,7 +110,10 @@ jobs:
       - name: Prepare deployment files
         working-directory: ${{ env.BACKEND_DIR }}
         run: |
-          # Create Dockerfile for Python/FastAPI backend
+          # Write the Dockerfile the deploy builds from. It overwrites the
+          # committed backend/Dockerfile, which stays as the local-build
+          # reference; the two must describe the same container, so a change to
+          # the run command belongs in both.
           cat > Dockerfile << 'EOL'
           FROM python:3.12-slim
 
@@ -126,7 +129,12 @@ jobs:
           CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
           EOL
 
-          # Create .gcloudignore
+          # Create .gcloudignore. This is a denylist, not an allowlist: every
+          # path not listed here is uploaded to Cloud Build, which is what keeps
+          # docs/ and every module in the image without naming them.
+          #
+          # Kept in step with the committed backend/.gcloudignore, which governs
+          # a manual `gcloud run deploy --source .` from a developer machine.
           cat > .gcloudignore << 'EOL'
           .git
           .gitignore
@@ -137,11 +145,10 @@ jobs:
           .github
           venv/
           README.md
-          !requirements.txt
-          !main.py
-          !gemini_helper.py
-          !docs_helper.py
-          !Dockerfile
+          tests/
+          evals/
+          pytest.ini
+          requirements-dev.txt
           EOL
 
           # Verify files
@@ -160,10 +167,9 @@ jobs:
           # failing the deploy or truncating the CORS allowlist. "|" cannot
           # appear in a URL or email address.
           #
-          # Both flags are kept on one line on purpose. A "\" continuation
-          # inside the quoted value preserves the next line's indentation, so
-          # every item after the first arrived with ~26 leading spaces in its
-          # key.
+          # Both flags stay on one line each. A "\" continuation inside the
+          # quoted value keeps the next line's indentation, which would give
+          # every item after the first ~26 leading spaces in its key.
           #
           # --service-account is the identity the container RUNS as, and it is
           # deliberately not the identity that deploys it. github-deployer holds
@@ -196,16 +202,7 @@ jobs:
             --labels="managed-by=github-actions,commit-sha=${{ github.sha }}" \
             --quiet
 
-      # The "Map Custom Domain" step that used to live here is gone, along with
-      # the beta components install that existed only to support it.
-      #
-      # It had never once worked: `gcloud beta run domain-mappings list` returns
-      # nothing, because Cloud Run domain mappings are not offered in me-west1.
-      # Every run failed and every run printed "continuing deployment", so the
-      # deploy stayed green and the step read as working for as long as nobody
-      # checked. A step that cannot succeed is worse than a missing one - it
-      # answers the question "is the API on a custom domain?" with a reassuring
-      # lie.
-      #
-      # api.yanirrot.com is now served by the Worker in edge/, which reaches
-      # Cloud Run over its run.app URL and needs no mapping.
+      # There is no custom-domain step. Cloud Run domain mappings are not
+      # offered in me-west1, so `gcloud beta run domain-mappings` cannot map one
+      # here. The public API hostname is served by the Cloudflare Worker in
+      # edge/, which reaches this service over its run.app URL.

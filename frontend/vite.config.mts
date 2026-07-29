@@ -14,11 +14,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // work and preview builds, where pointing at a different backend for an
 // afternoon should not be a commit.
 //
-// The production fallbacks stay empty on purpose. A hardcoded default here was
-// once the only reason production worked at all, which masked the fact that the
-// injected values were being dropped; an empty default makes a missing value
-// fail visibly instead of silently shipping a stale host. That guard still runs
-// below - site.config.ts satisfies it by stating a value, which is a different
+// The production fallbacks are empty so that a missing value fails the guard
+// below rather than silently shipping whichever host was hardcoded here.
+// site.config.ts satisfies the guard by stating a value, which is a different
 // thing from a default quietly standing in for one.
 const DEFAULT_BACKEND_URL = {
     production: '',
@@ -93,25 +91,11 @@ const TRAINING_CRAWLERS = [
 ] as const;
 
 /**
- * robots.txt, sitemap.xml and llms.txt, emitted rather than committed.
- *
- * All three have to state absolute URLs - the sitemap protocol requires them,
- * and a robots `Sitemap:` line is ignored without one - so none can be a static
- * file in public/ without hardcoding a host, which is the thing this config
- * exists to prevent. They are generated from the same resolved site URL that
- * fills in the canonical and OpenGraph tags, so there is one host to change.
- *
- * robots.txt additionally has to exist as a real file because `_redirects` maps
- * `/*` to index.html: without it, /robots.txt answers with the SPA shell. Most
- * crawlers read an unparseable robots.txt as "allow everything", but LinkedIn
- * and Facebook fetch it before reading the link-preview tags.
- */
-/**
- * The response headers Cloudflare Pages applies to every route, built here for
- * the same reason as the files above: the Content-Security-Policy has to name
- * the backend's origin in `connect-src`, and that origin is injected at build
- * time. A committed static `_headers` could only hardcode it, and a CSP that
- * disagrees with the deployed backend URL breaks every request the chat makes.
+ * The response headers Cloudflare Pages applies to every route, emitted rather
+ * than committed as a static `_headers` file: the Content-Security-Policy has
+ * to name the backend's origin in `connect-src`, and that origin is resolved at
+ * build time. A CSP that disagrees with the deployed backend URL breaks every
+ * request the chat makes, so the two are derived from one value.
  *
  * Notes on the specific choices, since a CSP is easy to copy and hard to read:
  *
@@ -119,33 +103,29 @@ const TRAINING_CRAWLERS = [
  *                       cloudflareinsights.com in connect-src to match.
  *                       Cloudflare injects its Web Analytics beacon into HTML
  *                       responses at the edge, so it is not in the built bundle
- *                       and nothing in this repository referenced it - which is
- *                       exactly why the first strict policy blocked it, and why
- *                       the error only appeared in a real browser. Analytics the
- *                       platform adds still has to be declared by the policy the
- *                       platform serves.
+ *                       and nothing in this repository references it - analytics
+ *                       the platform adds still has to be declared by the policy
+ *                       the platform serves, or the browser blocks it.
  *
- *                       Still no 'unsafe-inline'. The JSON-LD block in
- *                       index.html is a data block rather than executable
- *                       script - the HTML parser never prepares it for
- *                       execution, so CSP does not gate it and the structured
- *                       data survives the strict policy.
+ *                       No 'unsafe-inline'. The JSON-LD block in index.html is a
+ *                       data block rather than executable script - the HTML
+ *                       parser never prepares it for execution, so CSP does not
+ *                       gate it and the structured data survives this policy.
  *   style-src           'unsafe-inline' is required: three components set a
  *                       `style` attribute to pass a CSS custom property, and
  *                       style attributes are inline styles as far as CSP cares.
  *   img-src             'self' data: https:. Broader than the rest of this
  *                       policy, and deliberately. Project and writing images
- *                       are markdown Yanir writes, served from the backend at
- *                       runtime, and today they live on i.ibb.co. An allowlist
- *                       of image hosts would be tighter and would also break
- *                       silently every time he pasted an image from somewhere
- *                       new - the page would render with a hole in it and the
- *                       only symptom would be a console error in a visitor's
- *                       browser, not his. An image cannot execute, the site
- *                       holds no session to steal, and upgrade-insecure-requests
- *                       keeps this to https, so the cost of the wider directive
- *                       is a tracking pixel the author would have to add on
- *                       purpose.
+ *                       live in author-written markdown served from the backend
+ *                       at runtime, currently on i.ibb.co. An allowlist of image
+ *                       hosts would be tighter and would break silently the next
+ *                       time an image is pasted from somewhere new: the page
+ *                       renders with a hole in it and the only symptom is a
+ *                       console error in a visitor's browser, not the author's.
+ *                       An image cannot execute, the site holds no session to
+ *                       steal, and upgrade-insecure-requests keeps this to
+ *                       https, so the cost of the wider directive is a tracking
+ *                       pixel someone would have to add on purpose.
  *   frame-ancestors     'none' stops the site being framed - clickjacking cover
  *                       that X-Frame-Options duplicates for older agents.
  *
@@ -153,8 +133,8 @@ const TRAINING_CRAWLERS = [
  * and a link-preview card is precisely a cross-origin consumer of that file.
  *
  * HSTS carries includeSubDomains but deliberately not `preload`. Preloading is
- * baked into browser binaries and takes months to reverse, so it should be a
- * decision made once the domain's subdomain plans are settled, not a default
+ * baked into browser binaries and takes months to reverse, so it belongs to a
+ * decision made once the domain's subdomain plans are settled, not to a default
  * inherited from a config file.
  */
 // Cloudflare's Web Analytics beacon. The script is injected into HTML at the
@@ -206,18 +186,16 @@ const emitSecurityHeaders = (backendUrl: string, avatarUrl: string) => {
 };
 
 /**
- * What this deployment was actually built with, published at /build-info.json.
+ * What this deployment was built with, published at /build-info.json.
  *
- * Vite inlines the values above into the bundle, so from the outside there was
- * no way to tell which ones a live deployment had used. Finding out meant
- * grepping minified JavaScript, which is exactly what had to be done once when
- * a config change and a deploy crossed over and the site quietly kept talking
- * to the previous backend.
+ * Vite inlines these values into the bundle, so the only other way to tell
+ * which ones a live deployment is using is to grep minified JavaScript. This
+ * answers the question directly, which matters when a config change and a
+ * deploy cross over and the site is still talking to the previous backend.
  *
  * Nothing here is a secret. The site URL is in every OpenGraph tag, the backend
  * URL is in the bundle and the CSP, and the commit is public in a public
- * repository - this only collects what is already visible into one place that
- * answers the question directly.
+ * repository - this only collects what is already visible into one place.
  */
 const emitBuildInfo = (siteUrl: string, backendUrl: string, avatarUrl: string) =>
     JSON.stringify(
@@ -234,6 +212,20 @@ const emitBuildInfo = (siteUrl: string, backendUrl: string, avatarUrl: string) =
         2
     ) + '\n';
 
+/**
+ * robots.txt, sitemap.xml and llms.txt, emitted rather than committed.
+ *
+ * All three have to state absolute URLs - the sitemap protocol requires them,
+ * and a robots `Sitemap:` line is ignored without one - so none can be a static
+ * file in public/ without hardcoding a host, which is the thing this config
+ * exists to prevent. They are generated from the same resolved site URL that
+ * fills in the canonical and OpenGraph tags, so there is one host to change.
+ *
+ * robots.txt has to exist as a real file because `_redirects` maps `/*` to
+ * index.html: without it, /robots.txt answers with the SPA shell. Most crawlers
+ * read an unparseable robots.txt as "allow everything", but LinkedIn and
+ * Facebook fetch it before reading the link-preview tags.
+ */
 const emitDiscoveryFiles = (siteUrl: string, backendUrl: string, avatarUrl: string) => ({
     name: 'emit-discovery-files',
     generateBundle() {
@@ -396,10 +388,10 @@ export default defineConfig(({ mode, command }) => {
             include: ['react', 'react-dom', 'axios'],
         },
         envPrefix: 'VITE_',
-        // Both are defined explicitly rather than left to Vite's automatic
-        // VITE_ exposure, because their values now come from site.config.ts
-        // rather than from the environment - and automatic exposure only ever
-        // sees environment variables.
+        // Defined explicitly rather than left to Vite's automatic VITE_
+        // exposure, which only ever sees environment variables. These values
+        // usually come from site.config.ts, so without this the bundle would
+        // read them as undefined on any build that sets no env var.
         define: {
             'import.meta.env.VITE_BACKEND_URL': JSON.stringify(resolvedBackendUrl),
             'import.meta.env.VITE_AVATAR_URL': JSON.stringify(avatarUrl),

@@ -4,10 +4,10 @@ Prompt content lives in prompt.py and corpus assembly in context.py. What
 remains here is the part that talks to the API and decides what to do when it
 refuses.
 
-The fallback chain and its status-code handling are unchanged from the fix that
-established them: a chain that retried only on 503 never fell back at all,
-because retired models answer 404. It reads the SDK's structured status code
-rather than substring-matching the message.
+Failure handling turns on the SDK's structured status code rather than the text
+of the message. Which codes are worth falling back on is the whole question: a
+chain that treats only 503 as retryable never falls back at all, because a
+retired model answers 404.
 """
 
 from google import genai
@@ -24,9 +24,9 @@ from prompt import NO_KNOWLEDGE_MESSAGE, build_contents, build_system_instructio
 logger = logging.getLogger(__name__)
 
 # Fallback models in order of preference. The "-latest" aliases track the
-# current generation, so a model retirement upstream does not break chat the way
-# the pinned gemini-1.5-* names did; the pinned entry in the middle is the
-# escape hatch if an alias itself starts misbehaving.
+# current generation, so a retirement upstream does not take chat down the way a
+# pinned name would; the pinned entry in the middle is the escape hatch if an
+# alias itself starts misbehaving.
 MODELS = (
     "gemini-flash-latest",
     "gemini-3.5-flash",
@@ -41,15 +41,12 @@ RETRYABLE_STATUS_CODES = frozenset({404, 429, 500, 502, 503, 504})
 # How long one upstream call may take before it is abandoned. The SDK counts in
 # milliseconds.
 #
-# Sized against a measurement, not a guess. A real answer on this deployment was
-# observed at 16.4 seconds end to end, so the first value here - 20 seconds -
-# left under four seconds of headroom and would have cut off legitimate replies
-# on a slower day. That is the worse failure: a hung call wastes a worker, but a
-# truncated good answer is a visitor being told the site is broken when it was
-# about to work.
-#
-# This is a ceiling on pathology, not a latency target. It only has to be low
-# enough that a wedged connection cannot hold a worker indefinitely.
+# A ceiling on pathology, not a latency target: it only has to be low enough that
+# a wedged connection cannot hold a worker indefinitely. Real answers on this
+# deployment land around 16 seconds, so the generous margin is deliberate.
+# Cutting off a slow-but-working reply is the worse failure - a hung call wastes
+# a worker, but a truncated good answer tells a visitor the site is broken when
+# it was about to work.
 REQUEST_TIMEOUT_MS = 45_000
 
 # The visitor's ceiling, across the whole fallback chain.
@@ -66,10 +63,10 @@ TOTAL_DEADLINE_SECONDS = 70
 
 # How long a model is left alone after it refuses.
 #
-# Without this, every request re-attempted every exhausted model and paid the
-# round-trip to be told "no" again - which is how a spent daily quota turned
-# into queued requests and a starved service rather than a fast, honest "I'm
-# getting more questions than I can keep up with".
+# Without it, every request re-attempts every exhausted model and pays the
+# round-trip to be told "no" again, so a spent daily quota becomes queued
+# requests and a starved service instead of a fast, honest "I'm getting more
+# questions than I can keep up with".
 #
 # Deliberately short, and deliberately not parsed from the quota metadata. A
 # 429 may mean the per-minute burst or the per-day allowance, and distinguishing
@@ -104,10 +101,9 @@ TEMPERATURE = 0.3
 
 # A hard stop on cost per request. It is NOT a length control, and sizing it as
 # one truncates answers: on Gemini 3.x this budget is shared with the model's
-# internal thinking tokens, which are spent first. Measured at a 400 budget,
-# gemini-flash-latest spent 382 tokens thinking and had 14 left for the answer,
-# so visitors got "I'm currently a Full Stack Developer at Moonsite, where" and
-# nothing else - a complete-looking success with finish_reason=MAX_TOKENS.
+# internal thinking tokens, which are spent first. At a 400-token budget the
+# model spends ~382 of them thinking and has 14 left, so the visitor gets half a
+# sentence returned as a complete-looking success with finish_reason=MAX_TOKENS.
 #
 # Answer length is the prompt's job ("two to four sentences"). This number only
 # needs enough headroom that thinking plus a normal answer fits; observed usage
@@ -165,15 +161,12 @@ def get_gemini_response(
         logger.error("Refusing to answer: knowledge corpus is empty")
         return NO_KNOWLEDGE_MESSAGE
 
-    # A ceiling on how long one upstream call may hold a worker.
-    #
-    # There was none, and it mattered more than it looks. Cloud Run runs at most
-    # four instances, each a single uvicorn process, so a handful of calls that
-    # hang occupy the whole service - and when the daily quota ran out, requests
-    # queued behind three sequential model attempts until endpoints that never
-    # touch Gemini, /api/chat/status among them, started timing out too. The
-    # chat being unavailable is a degradation; taking the rest of the site with
-    # it is an outage, and nothing in the code prevented that.
+    # The per-call timeout is what keeps a hung upstream call from holding a
+    # worker. Cloud Run runs at most four instances, each a single uvicorn
+    # process, so a handful of stalled calls occupy the whole service and
+    # endpoints that never touch Gemini - /api/chat/status among them - start
+    # timing out behind them. Chat being unavailable is a degradation; taking the
+    # rest of the site with it is an outage.
     client = genai.Client(
         api_key=api_key,
         http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS),
@@ -203,8 +196,7 @@ def get_gemini_response(
 
         # A model that just refused is skipped without a call. Asking again
         # inside the cooldown buys nothing and costs the round-trip, which is
-        # the whole reason an exhausted quota was able to queue requests up
-        # behind it.
+        # how an exhausted quota queues requests up behind it.
         if _model_is_cooling(model_id, now):
             logger.info("Skipping %s: still cooling down after a recent refusal", model_id)
             continue
@@ -276,9 +268,8 @@ def get_gemini_response(
 def _log_usage(model_id: str, response) -> bool:
     """Records what the request actually cost, and whether it was cut short.
 
-    Nothing measured how many tokens a chat message consumed, which is why the
-    question of whether the corpus needs trimming has only ever been answered by
-    guesswork. These numbers are the input to that decision.
+    The token counts are what makes "does the corpus need trimming?" answerable
+    with a number rather than a guess.
 
     The truncation warning exists because truncation is otherwise invisible: the
     call succeeds, `response.text` is a plausible string, and only

@@ -2,9 +2,8 @@
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
-        <!-- viewport-fit=cover exposes the safe-area insets the chat reads. Zoom is
-             deliberately not disabled: the previous runtime override set
-             maximum-scale=1.0 and user-scalable=0, which blocks pinch zoom. -->
+        <!-- viewport-fit=cover exposes the safe-area insets the chat reads. No
+             maximum-scale or user-scalable: either one blocks pinch zoom. -->
         <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
         <title>Yanir Rot - Full-Stack AI Engineer</title>
@@ -14,9 +13,9 @@
             content="The assistant answers as me, from my notes and project write-ups. When they don’t cover your question it says so rather than guessing."
         />
 
-        <!-- The site-URL placeholder below is substituted at build time from the
-             VITE_SITE_URL env var, which a production build requires. Set that
-             variable to the real domain rather than hardcoding a host here. -->
+        <!-- %VITE_SITE_URL% is substituted at build time by vite.config.mts,
+             from `url` in site.config.ts. Change it there rather than
+             hardcoding a host in this markup. -->
         <link rel="canonical" href="%VITE_SITE_URL%/" />
 
         <meta property="og:type" content="website" />

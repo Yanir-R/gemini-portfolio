@@ -1,20 +1,19 @@
 #!/usr/bin/env node
 /*
- * Asserts that the link-preview copy still matches the page.
+ * Asserts that the link-preview copy matches the page.
  *
- * The home page standfirst has to appear in four places outside the module
- * graph: three description tags in index.html, and the card source in
- * tools/og-image.html. None of them can import a constant, so all four were
- * written by hand - and when the page's sentence changed, all four kept the old
- * one. The preview then advertised a sentence the site no longer said, in the
- * third person, on a site whose argument is that it speaks in Yanir's voice.
+ * The home page standfirst appears in four places outside the module graph:
+ * three description tags in index.html and the card text in
+ * tools/og-image.html. None of them can import a constant, so all four are
+ * written by hand and can drift from SITE_COPY.STANDFIRST independently.
  *
- * A stale preview is invisible from inside the app: every local check passes,
- * the page looks right, and the only symptom appears in someone else's Slack.
- * That is what makes it worth a CI step rather than a note in a README.
+ * Drift is invisible from inside the app - the page renders correctly and every
+ * other check passes, while the preview advertises a sentence the site no
+ * longer says. The only symptom appears in someone else's chat client, which is
+ * why this is a CI step rather than a note in a README.
  *
- * This checks the text. It cannot check that public/og-image.png was
- * regenerated from og-image.html afterwards - see that file's header for the
+ * This compares text only. It cannot tell whether public/og-image.png was
+ * regenerated from og-image.html afterwards; see that file's header for the
  * headless Chrome command.
  */
 

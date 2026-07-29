@@ -2,10 +2,9 @@ import React from 'react';
 import { NavLink, useLocation } from 'react-router';
 
 /*
- * Nav items carried an emoji each (a person, a rocket, a memo). They were the
- * loudest thing in the header and encoded nothing the word beside them did not
- * already say. The active state now does the only job an indicator has here -
- * showing where you are - with a 1px rule in the state colour.
+ * Words only - an icon beside each would encode nothing the word does not
+ * already say. The active state does the only job an indicator has here,
+ * showing where you are, with a 1px rule in the state colour.
  */
 interface NavLinkItem {
     href: string;

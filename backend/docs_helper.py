@@ -12,27 +12,35 @@ from typing import List, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# Get the absolute path of the current file's directory
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DOCS_DIR = os.path.join(BASE_DIR, "docs")
 
 # Yanir's own documents. Named for what it is: this repository is public and
 # these files are served over /api/content/, so everything in here is published.
-# It was called "private/", which claimed an access boundary that has never
-# existed and invited exactly the mistake of putting something sensitive in it.
+# A name like "private/" would claim an access boundary that does not exist and
+# invite putting something sensitive in it.
 PROFILE_DIR = os.path.join(DOCS_DIR, "profile")
-
-# Placeholder documents for anyone forking this repo. Never loaded into the
-# chat's context - see the note in context.py about why an empty corpus fails
-# loudly instead of falling back to these.
-TEMPLATES_DIR = os.path.join(DOCS_DIR, "templates")
 
 PROJECTS_DIR = os.path.join(DOCS_DIR, "projects")
 
-# There is deliberately no STATIC_DIR. Project screenshots are frontend assets,
-# served from the CDN alongside the rest of the site; routing them through this
-# API would put static files back on a single-region container, which is the
-# arrangement the move to Cloudflare Pages existed to undo.
+# Two directories deliberately have no constant here.
+#
+# `docs/templates/` holds placeholder documents for anyone forking this repo.
+# Nothing reads it, and the chat corpus is built only from the directories named
+# in this module - see context.py on why an empty corpus fails loudly rather than
+# falling back to placeholders.
+#
+# There is no STATIC_DIR either. Project screenshots are frontend assets served
+# from the CDN alongside the rest of the site; routing them through this API
+# would put static files back on a single-region container.
+
+# `## Section` headings a project write-up may use as metadata. Anything else at
+# that level is prose and stays in the body.
+PROJECT_METADATA_SECTIONS = frozenset({
+    'project_type', 'status', 'demo_url', 'repository',
+    'media', 'featured', 'category', 'license',
+})
+
 
 def read_markdown_file(file_path: str) -> str:
     """Read content from markdown file"""
@@ -55,52 +63,39 @@ def read_pdf_file(file_path: str) -> str:
 
 def parse_project_metadata(content: str) -> Dict[str, Any]:
     """Parse project metadata from markdown content"""
-    metadata = {}
+    metadata: Dict[str, Any] = {}
     lines = content.split('\n')
-    current_section = None
-    
+
     for i, line in enumerate(lines):
         line = line.strip()
-        
-        # Handle h2 sections (## Section Name) - only metadata sections
-        metadata_sections = ['project_type', 'status', 'demo_url', 'repository', 'media', 'featured', 'category', 'license']
-        if line.startswith('## ') and line[3:].strip().lower().replace(' ', '_') in metadata_sections:
+
+        # A recognised `## Section` takes its value from the next non-empty,
+        # non-heading line. Section names double as metadata keys, so an entry
+        # added to PROJECT_METADATA_SECTIONS needs no code change here.
+        if line.startswith('## ') and line[3:].strip().lower().replace(' ', '_') in PROJECT_METADATA_SECTIONS:
             current_section = line[3:].strip().lower().replace(' ', '_')
-            # Get the content of the next non-empty line after this section
             for j in range(i + 1, len(lines)):
                 next_line = lines[j].strip()
                 if next_line and not next_line.startswith('#'):
-                    # Map section names to metadata keys
-                    if current_section == 'project_type':
-                        metadata['project_type'] = next_line
-                    elif current_section == 'status':
-                        metadata['status'] = next_line
-                    elif current_section == 'demo_url':
-                        metadata['demo_url'] = next_line
-                    elif current_section == 'repository':
-                        metadata['repository'] = next_line
-                    elif current_section == 'media':
-                        metadata['media'] = next_line
-                    elif current_section == 'featured':
-                        metadata['featured'] = next_line.lower() == 'true'
-                    elif current_section == 'category':
-                        metadata['category'] = next_line
-                    elif current_section == 'license':
-                        metadata['license'] = next_line
+                    metadata[current_section] = (
+                        next_line.lower() == 'true'
+                        if current_section == 'featured'
+                        else next_line
+                    )
                     break
-        
+
         # Handle technical details format (- **Field**: Value)
         elif line.startswith('- **') and '**:' in line:
             match = re.match(r'- \*\*(.*?)\*\*:\s*(.*)', line)
             if match:
                 key = f"tech_{match.group(1).lower().replace(' ', '_').replace('-', '_')}"
                 metadata[key] = match.group(2).strip()
-    
+
     # Extract title from first h1
     title_match = re.search(r'^# (.+)$', content, re.MULTILINE)
     if title_match:
         metadata['title'] = title_match.group(1)
-    
+
     # Extract overview - try multiple patterns
     overview_match = re.search(r'## Overview\s*\n(.*?)(?=\n##|\Z)', content, re.DOTALL)
     if not overview_match:
@@ -109,7 +104,7 @@ def parse_project_metadata(content: str) -> Dict[str, Any]:
         overview_lines = []
         found_title = False
         skip_empty = True
-        
+
         for line in lines:
             line = line.strip()
             if line.startswith('# '):
@@ -124,41 +119,37 @@ def parse_project_metadata(content: str) -> Dict[str, Any]:
                 overview_lines.append(line)
                 if len(' '.join(overview_lines)) > 200:  # Stop after reasonable length
                     break
-        
+
         if overview_lines:
             metadata['overview'] = ' '.join(overview_lines).strip()
     else:
         metadata['overview'] = overview_match.group(1).strip()
-    
+
     return metadata
 
 def get_all_projects() -> List[Dict[str, Any]]:
     """Get all projects with their metadata"""
     projects = []
-    
+
     if not os.path.exists(PROJECTS_DIR):
         return projects
-    
+
     for filename in os.listdir(PROJECTS_DIR):
         if filename.endswith('.md'):
             file_path = os.path.join(PROJECTS_DIR, filename)
             content = read_markdown_file(file_path)
-            
+
             if content:
                 metadata = parse_project_metadata(content)
                 metadata['slug'] = filename[:-3]  # Remove .md extension
                 metadata['content'] = content
-                
+
                 # A `## Media` value is a location the browser can fetch: an
-                # absolute URL, or a root-relative path served by the frontend
-                # out of `public/`. Anything else is a mistake in the write-up.
-                #
-                # The alternative - a bare filename resolved against a backend
-                # static directory - was removed rather than kept. That
-                # directory did not exist, nothing mounted `/static`, and no
-                # write-up used the form, so the branch could only ever produce
-                # a URL that 404s. Serving screenshots from the API container
-                # would also undo the point of moving the frontend to a CDN.
+                # absolute URL, or a root-relative path the frontend serves out
+                # of `public/`. Anything else is a mistake in the write-up.
+                # A bare filename is not resolved against a backend directory -
+                # nothing mounts `/static`, and serving screenshots from the API
+                # container is what the CDN exists to avoid.
                 media_name = metadata.get('media', '')
                 if media_name:
                     if media_name.startswith(('http://', 'https://', '/')):
@@ -177,19 +168,13 @@ def get_all_projects() -> List[Dict[str, Any]]:
                         )
                         metadata['has_media'] = False
                         metadata['media_url'] = None
-                
-                # Parse featured as boolean (if not already parsed)
-                featured_value = metadata.get('featured', False)
-                if isinstance(featured_value, str):
-                    metadata['featured'] = featured_value.lower() == 'true'
-                elif isinstance(featured_value, bool):
-                    metadata['featured'] = featured_value
-                else:
-                    metadata['featured'] = False
-                
-                
+
+                # Always present, so the sort key below and every consumer can
+                # read it without a default of their own.
+                metadata.setdefault('featured', False)
+
                 projects.append(metadata)
-    
+
     # Sort by featured status
     projects.sort(key=lambda x: x.get('featured', False), reverse=True)
     return projects

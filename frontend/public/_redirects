@@ -1,4 +1,7 @@
-# Cloudflare Pages: serve index.html for client-side routes so deep links like
-# /projects/reelsensei and /about resolve instead of 404ing. Mirrors the
-# `try_files $uri $uri/ /index.html` rule the nginx container used.
+# Cloudflare Pages serves index.html for client-side routes, so deep links like
+# /projects/reelsensei and /about reach the router instead of 404ing.
+#
+# Real files are matched first, which is why robots.txt, sitemap.xml, llms.txt
+# and build-info.json have to be emitted as files: anything this rule catches is
+# answered with the SPA shell and a 200, not a 404.
 /*    /index.html   200

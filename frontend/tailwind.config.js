@@ -3,16 +3,14 @@
 /*
  * An instrument palette, not a brand palette.
  *
- * The previous one was built around a purple->pink gradient, which is the most
- * common signature on AI developer portfolios and read as templated before a
- * word was. More importantly it spent colour on decoration, leaving nothing to
- * spend on meaning.
- *
- * Here colour carries state and nothing else:
+ * Colour carries state and nothing else:
  *   signal  - the assistant answered from the corpus
  *   caution - the assistant declined; no source supported the question
  *   danger  - something actually failed
- * Everything else is a neutral on the ink scale. There are no gradients.
+ *
+ * Everything else is a neutral on the ink scale, and there are no gradients.
+ * Spending colour on decoration leaves none to spend on meaning, which is the
+ * whole reason the three state hues read as information rather than styling.
  */
 module.exports = {
     content: ['./src/**/*.{js,jsx,ts,tsx}'],
@@ -37,22 +35,12 @@ module.exports = {
                 caution: '#E0A253',
                 danger: '#E4726A',
 
-                // Aliases kept so existing utility names resolve to the new
-                // palette instead of silently falling back to Tailwind defaults.
-                dark: {
-                    primary: '#0B0F12',
-                    secondary: '#111920',
-                    tertiary: '#16202A',
-                    terminal: '#0B0F12',
-                },
+                // Named separately from the ink scale because Tailwind's own
+                // `border-*` utilities take a colour, and `border-border` is
+                // what makes the hairline one token rather than a repeated hex.
                 border: {
                     DEFAULT: '#1F2B34',
                     hover: '#2A3945',
-                },
-                status: {
-                    online: '#5FD3A0',
-                    error: '#E4726A',
-                    warning: '#E0A253',
                 },
             },
             fontFamily: {
@@ -63,14 +51,14 @@ module.exports = {
                 mono: ['SF Mono', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
             },
             keyframes: {
-                // The only motion left. `disco`, `float` and `bounce-gentle`
-                // animated decorative emoji that no longer exist.
+                // The only two animations. Motion here reports something true
+                // rather than decorating: content arriving, and a request in
+                // flight.
                 fadeIn: {
                     '0%': { opacity: '0', transform: 'translateY(4px)' },
                     '100%': { opacity: '1', transform: 'translateY(0)' },
                 },
-                // Shown while the model is generating. This one reports
-                // something true - a request is in flight - so it stays.
+                // Shown while the model is generating.
                 blink: {
                     '0%, 80%, 100%': { opacity: '0.25' },
                     '40%': { opacity: '1' },

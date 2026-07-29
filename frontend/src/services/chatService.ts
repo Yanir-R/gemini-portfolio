@@ -4,9 +4,11 @@ import { API_ENDPOINTS } from '@/api/endpoints';
 import { ChatMessage } from '@/types/chat';
 
 /**
- * Kept below the backend's MAX_HISTORY_MESSAGES (40). The server only replays the
- * last few turns to the model regardless, so sending more costs bandwidth and
- * buys nothing.
+ * Kept well below the backend's MAX_HISTORY_MESSAGES (40), which rejects a
+ * longer history with a 422. That cap is a server-side guard against a
+ * hand-crafted request; a visitor simply having a long conversation must not
+ * trip it. The server only replays the last few turns to the model anyway, so
+ * sending more costs bandwidth and buys nothing.
  */
 const MAX_HISTORY_SENT = 20;
 
@@ -14,16 +16,10 @@ interface ChatResponse {
     response: string;
     is_email_collection?: boolean;
     email_collected?: boolean;
-    status?: string;
-    message?: string;
 }
 
 export const chatService = {
-    /**
-     * Whether the backend has content to ground its answers in. The endpoint this
-     * replaced also returned server filesystem paths and document filenames; none
-     * of it was ever read here beyond this one boolean.
-     */
+    /** Whether the backend has content to ground its answers in. */
     checkKnowledge: async () => {
         const response = await apiClient.get<{ knowledge_ready: boolean }>(
             API_ENDPOINTS.CHAT_STATUS
@@ -35,11 +31,6 @@ export const chatService = {
         try {
             const response = await apiClient.post<ChatResponse>(API_ENDPOINTS.CHAT, {
                 message,
-                // The backend caps history length and rejects anything longer with
-                // a 422. That cap is a server-side guard against a hand-crafted
-                // request; a visitor simply having a long conversation must not
-                // trip it, so the client stays well under it. Only the tail is
-                // used for context anyway.
                 conversation_history: conversationHistory.slice(-MAX_HISTORY_SENT).map((msg) => ({
                     type: msg.type,
                     content: msg.content,

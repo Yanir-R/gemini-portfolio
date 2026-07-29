@@ -9,23 +9,13 @@ import { useScreenSize } from '@/hooks/useScreenSize';
 /*
  * The transcript.
  *
- * Three things changed beyond the palette, and each removed behaviour rather
- * than adding it:
+ * The panel is quiet on purpose. Nothing here announces itself unprompted, and
+ * the only state it reports is the failure one, so the text a visitor came to
+ * read is the loudest thing in it.
  *
- * 1. The header carried a disco-ball emoji on a gradient chip with four stacked
- *    blur layers and a hue-rotate animation on hover, plus a second emoji beside
- *    the name. It was the loudest element on the site and said nothing.
- *
- * 2. A tooltip reading "Click to send me an email" appeared unprompted on every
- *    visit and dismissed itself after seven seconds. Supporting it cost a
- *    ResizeObserver, a MutationObserver watching body's class list, a scroll and
- *    resize listener, and four pieces of state - all to nag a visitor who had
- *    not asked anything yet. The email action is still one click away in the
- *    header, which is where it belonged.
- *
- * 3. Message rows were marked `pointer-events-none`, which made the assistant's
- *    answers impossible to select or copy. On a page whose entire purpose is
- *    producing text worth reading, that was the most expensive line in the file.
+ * Message rows carry no `pointer-events` restriction: the answers must stay
+ * selectable and copyable, which on a page whose whole purpose is producing text
+ * worth reading matters more than any hover effect would.
  */
 const Chat: React.FC = () => {
     const {
@@ -77,20 +67,19 @@ const Chat: React.FC = () => {
     };
 
     // Not on the first render. Scrolling to the end of a transcript that is only
-    // the greeting pins its *last* line to the bottom of the panel and pushes
-    // its first line up behind the header, so the opening message arrived
-    // already cut off. There is nothing below the greeting to scroll to; the
-    // scroll only earns its place once a reply exists.
+    // the greeting would pin its last line to the bottom of the panel and push
+    // its first line up behind the header, cutting off the opening message.
+    // There is nothing below the greeting to scroll to, so the scroll earns its
+    // place only once a reply exists.
     useEffect(() => {
         if (chatHistory.length <= 1 && !isLoading) return;
         scrollToBottom();
     }, [chatHistory, isLoading]);
 
-    // The placeholder is the only instruction the composer gives, so it has to
-    // track what the conversation is actually asking for. It previously invited
-    // a question about the work even while the assistant was waiting for an
-    // email address, which is the moment a visitor most needs telling what to
-    // type - and that a message alongside it is optional.
+    // The placeholder is the only instruction the composer gives, so it tracks
+    // what the conversation is asking for right now. Being asked for an email
+    // address is the moment a visitor most needs telling what to type - and that
+    // a message alongside it is optional.
     const placeholder =
         hasFiles === null
             ? 'Connecting…'
@@ -100,21 +89,16 @@ const Chat: React.FC = () => {
                 ? 'Waiting for a reply…'
                 : awaitingEmail
                   ? // Kept short deliberately: a placeholder that overflows the
-                    // input is worse than a vaguer one, and the longer version
-                    // clipped mid-word at "(optiona…".
+                    // input and clips mid-word is worse than a vaguer one.
                     'Your email address (a message is optional)'
                   : 'Ask about the work, or how it was built';
 
-    // The height was `100vh - 15rem`, which assumed the page could not scroll
-    // and that the hero above it was short. Both stopped being true: on a phone
-    // it resolved taller than the space left for it, so the composer was pushed
-    // off the bottom of a viewport that was also locked.
-    //
-    // A plain fixed height is enough now that the page scrolls - the transcript
-    // has its own scrollbar, so the panel never needs to grow - and it only
-    // stretches to fill its column at `lg`. The keyboard case keeps a
-    // viewport-relative height, because that is the one moment the visible area
-    // really does change under it.
+    // A plain fixed height, because the page scrolls and the transcript has its
+    // own scrollbar, so the panel never needs to grow to fit its contents. It
+    // stretches to fill its column only at `lg`, where the grid gives it a
+    // definite height. The keyboard case is the exception: that is the one
+    // moment the visible area really does change under the panel, so it takes a
+    // viewport-relative height.
     return (
         <div
             className={`flex flex-col ${
@@ -123,32 +107,24 @@ const Chat: React.FC = () => {
         >
             {/* Header */}
             <div className="flex gap-2 justify-between items-center px-3 py-2.5 border-b sm:gap-4 sm:px-4 sm:py-3 border-border">
-                {/* Fourth attempt, and the first three each failed differently:
-                    "Grounded assistant" was jargon, "Answers from my notes"
-                    repeated the line directly above the panel, and "AI
-                    assistant" was accurate in isolation but disagreed with its
-                    own neighbours.
+                {/* The panel commits to one speaker and states the arrangement
+                    outright. The replies are first-person as Yanir, because
+                    prompt.py requires it, and his photograph sits beside them -
+                    so the label has to name the machine, or the header would
+                    have a face and a voice disagreeing about who is talking.
 
-                    Adding Yanir's photograph turned that disagreement into three
-                    speakers in one header: a label saying machine, a face saying
-                    Yanir, and a greeting that switched person mid-sentence. The
-                    replies themselves are first-person as Yanir, because
-                    prompt.py requires it.
-
-                    So the panel commits to one speaker and states the
-                    arrangement outright. Disclosure belongs in a label a visitor
-                    reads once, not in the grammar of every sentence. */}
+                    Disclosure belongs in a label a visitor reads once, not in
+                    the grammar of every sentence the assistant produces. */}
                 <p className="label whitespace-nowrap text-[0.62rem] sm:text-[0.72rem]">
                     AI, answering as Yanir
                 </p>
 
                 <div className="flex flex-shrink-0 gap-3 items-center">
-                    {/* Report by exception.
-                        A green "online" dot borrows the presence indicator from
-                        chat apps, where it means a person is at their keyboard.
-                        Here it was true on every render and told a visitor
-                        nothing they could act on, while quietly implying someone
-                        was waiting on the other end.
+                    {/* Report by exception. A green "online" dot would borrow
+                        the presence indicator from chat apps, where it means a
+                        person is at their keyboard - here it would be true on
+                        every render, tell a visitor nothing they could act on,
+                        and quietly imply someone was waiting on the other end.
 
                         The failure state is the only one worth a badge, so it is
                         the only one that gets one. */}
@@ -162,25 +138,20 @@ const Chat: React.FC = () => {
                         </span>
                     )}
 
-                    {/* This was mono, uppercase, muted and borderless, which is
-                        the exact styling of the label on the other side of the
-                        same row. Two pieces of identical-looking text, one inert
-                        and one the only action in the panel.
+                    {/* The only action in the panel, so it carries every
+                        affordance the design language has: a border like the
+                        site's other buttons, the signal colour reserved for
+                        things that do something, an icon, and a hover state that
+                        fills rather than merely tinting. Without them it would
+                        look identical to the inert label across the row, which
+                        is mono, uppercase and muted too.
 
-                        It now carries every affordance the design language has
-                        available: a border like the site's other buttons, the
-                        signal colour reserved for things that do something, an
-                        icon, and a hover state that fills rather than merely
-                        tinting.
-
-                        The label is "Leave your email" rather than "Email me"
-                        because the two describe different mechanics. "Email me"
-                        promises a mail client or a modal; this button does
-                        neither. It posts a turn into the conversation, and the
-                        visitor then types their address into the same composer
-                        they were asking questions with. Naming the action the
-                        visitor performs sets that expectation; naming the
-                        outcome did not. */}
+                        "Leave your email" rather than "Email me" because the two
+                        describe different mechanics. "Email me" promises a mail
+                        client or a modal; this posts a turn into the
+                        conversation, and the visitor types their address into
+                        the same composer they were asking questions with. The
+                        label names the action the visitor performs. */}
                     <button
                         type="button"
                         onClick={handleEmailClick}
@@ -213,11 +184,7 @@ const Chat: React.FC = () => {
                 style={{ WebkitOverflowScrolling: 'touch' }}
             >
                 {chatHistory.map((msg, index) => (
-                    <div
-                        key={index}
-                        className="flex gap-3 items-start mb-5 animate-fadeIn"
-                        // No pointer-events-none here: answers must be selectable.
-                    >
+                    <div key={index} className="flex gap-3 items-start mb-5 animate-fadeIn">
                         <MessageAvatar type={msg.type} />
                         <div
                             className={`max-w-[88%] ${
@@ -272,9 +239,7 @@ const Chat: React.FC = () => {
 
             <form
                 onSubmit={handleSubmit}
-                className={`relative z-10 border-t border-border bg-ink-800 p-3 ${
-                    isKeyboardVisible ? 'pb-safe' : ''
-                }`}
+                className="relative z-10 p-3 border-t border-border bg-ink-800"
             >
                 <div className="flex relative items-center">
                     <input

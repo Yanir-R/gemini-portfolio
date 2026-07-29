@@ -2,23 +2,17 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 
 /*
- * Renders the write-up markdown the backend serves.
+ * Renders the write-up markdown the backend serves - the same documents
+ * context.py assembles into the chat's corpus.
  *
- * This exists because the project pages stopped rendering a hand-maintained
- * copy of each write-up and started rendering `project.content` - the real
- * markdown that context.py also assembles into the chat's corpus. That document
- * is genuine markdown, so it needs a renderer; printing it verbatim showed
- * `##` and `**` to the reader.
+ * react-markdown rather than a regex pass because it never goes through
+ * `dangerouslySetInnerHTML`: it builds React elements directly, so raw HTML in a
+ * document cannot become live markup. That matters more than usual here, since
+ * these documents are also fed to a model, and an injected `<script>` would
+ * otherwise have two ways in.
  *
- * react-markdown is used rather than a regex pass because it does not go
- * through `dangerouslySetInnerHTML`: it builds React elements directly, so raw
- * HTML in a document cannot become live markup. That matters more than usual
- * here, since the same documents are also fed to a model, and an injected
- * `<script>` would otherwise have two ways in.
- *
- * Every element is styled explicitly. The site has no typography plugin, and
- * relying on browser defaults inside a serif page produced Times-Roman headings
- * at the wrong scale.
+ * Every element is styled explicitly. There is no typography plugin, and browser
+ * defaults inside a serif page give Times-Roman headings at the wrong scale.
  */
 const COMPONENTS = {
     h1: (props: React.ComponentProps<'h1'>) => (

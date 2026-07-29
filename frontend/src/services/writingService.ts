@@ -1,46 +1,14 @@
 import axios from 'axios';
-import { apiClient } from '@/api/client';
+import { apiClient, toRequestError } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/endpoints';
 import { WritingEntry } from '@/types/writing';
+import { stripMetadataSections } from '@/utils/markdown';
 
-const CONNECTION_ERROR =
-    'Cannot connect to backend service. Please check if the server is running.';
-
-const toRequestError = (error: unknown, context: string): Error => {
-    console.error(`${context}:`, error);
-
-    if (axios.isAxiosError(error)) {
-        if (error.response) {
-            const { status, statusText, data } = error.response;
-            return new Error(`Server error (${status}): ${data?.detail || statusText}`, {
-                cause: error,
-            });
-        }
-        if (error.request) {
-            return new Error(CONNECTION_ERROR, { cause: error });
-        }
-    }
-
-    return new Error(`Request failed: ${error instanceof Error ? error.message : String(error)}`, {
-        cause: error,
-    });
-};
-
-/**
- * Metadata sections the backend parses out of each document. They are rendered
- * as chips, links and dates in the page's own layout, so printing them again as
- * body copy would repeat everything the header already said.
- */
+/** Sections the backend parses out of each document into `WritingEntry` fields. */
 const METADATA_HEADINGS = ['Kind', 'Source', 'URL', 'Date', 'Media', 'Summary', 'Related'];
 
 export const stripWritingMetadata = (markdown: string): string =>
-    markdown
-        .split(/\n(?=## )/)
-        .filter((section) => {
-            const heading = section.match(/^## (.+)$/m)?.[1]?.trim();
-            return !heading || !METADATA_HEADINGS.includes(heading);
-        })
-        .join('\n')
+    stripMetadataSections(markdown, METADATA_HEADINGS)
         // The title is rendered as the page heading, so drop the leading H1 to
         // avoid showing it twice.
         .replace(/^#\s+.*\n?/, '')

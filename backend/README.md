@@ -77,7 +77,7 @@ pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-Run a **single process**. `rate_limit.py` keeps counters in-process, so N workers multiply the global ceiling by N — see the note in `Dockerfile` before changing the run command.
+Run a **single process**. `rate_limit.py` keeps counters in-process, so N workers multiply the global ceiling by N — see the note in `Dockerfile` before changing the run command, and mirror any change in the Dockerfile the deploy workflow generates.
 
 ## Configuration
 
@@ -95,8 +95,15 @@ Optional:
 | --- | --- |
 | `ALLOWED_ORIGINS` | Comma-separated origins added to the CORS allowlist |
 | `FRONTEND_PROD_URL`, `FRONTEND_DEV_URL`, `FRONTEND_VITE_URL` | Individual origins |
+| `ORIGIN_SHARED_SECRET` | The edge Worker's `EDGE_SECRET`. Unset means "do not enforce" |
 
 Localhost origins are always allowed. There is no wildcard origin — `allow_credentials` is enabled, so the allowlist stays explicit.
+
+### The edge secret
+
+In production this service sits behind the Cloudflare Worker in [`edge/`](../edge/README.md), which adds `X-Edge-Auth` to every request it forwards. With `ORIGIN_SHARED_SECRET` set, anything arriving without a matching value gets a **403** — including a direct call to the `run.app` URL, which Cloud Run cannot hide. `/` and `/health` stay reachable without it so health probes keep working. The value is compared after stripping surrounding whitespace, with a constant-time function so it cannot be probed a byte at a time.
+
+Unset means no enforcement, which is what makes a rollout safe: the Worker and the frontend can be moved over before the backend starts requiring the header. Leave it unset locally.
 
 ### Rate limiting
 
@@ -125,17 +132,17 @@ Over-limit requests get **429** with a `Retry-After` header.
 | `POST /chat-with-files` | Rate limited |
 | `POST /api/contact` | Rate limited |
 
-Two endpoints were removed rather than fixed. `GET /check-paths` returned absolute server
-filesystem paths, the working directory and a listing of document filenames to any anonymous
-caller; the only thing any client ever read from it was one boolean, which `/api/chat/status`
-now returns. `POST /generate-text` called Gemini with no corpus at all — unauthenticated,
-ungrounded, and referenced by no client.
+There is deliberately no debug or ungrounded-generation endpoint. If you are porting from a
+fork that has one: an endpoint returning server filesystem paths and document listings to
+anonymous callers belongs behind `/api/chat/status`, which answers the one useful question as
+a boolean; and an endpoint that calls Gemini with no corpus is unauthenticated, ungrounded
+spend with nothing to attribute it to.
 
 Unexpected errors return an opaque `"Internal server error"`; details are logged server-side with a stack trace rather than reflected to the caller.
 
 ### Gemini models
 
-`gemini_helper.py` tries `-latest` aliases first. Pinned model names were previously used and **all four were retired upstream**, which broke chat entirely with 404s. Fallback advances on 404/429/5xx read from the SDK's structured `APIError.code`, not substring matching.
+`gemini_helper.py` tries `-latest` aliases first, then falls back down a list. Pinning exact model names is what breaks: a retired name answers 404 and takes chat down with it. Fallback advances on 404/429/5xx read from the SDK's structured `APIError.code`, not substring matching.
 
 ## Deployment
 
@@ -143,7 +150,13 @@ Pushing to `main` runs `verify` (compile, import smoke check, `pip-audit`) then 
 
 Authentication uses **Workload Identity Federation**, keyless. There is no service-account JSON key; the OIDC provider is restricted by attribute condition to this repository.
 
-`GEMINI_API_KEY` and `EMAIL_PASSWORD` are attached from **Secret Manager** with `--set-secrets`, not `--set-env-vars` — env vars are readable in Cloud Run revision metadata by anyone with console/API read on the service.
+`GEMINI_API_KEY`, `EMAIL_PASSWORD` and `ORIGIN_SHARED_SECRET` are attached from **Secret Manager** with `--set-secrets`, not `--set-env-vars` — env vars are readable in Cloud Run revision metadata by anyone with console/API read on the service.
+
+The container runs as `GCP_RUNTIME_SA`, not as the deploy account: the metadata server mints tokens for whatever the service runs as, so running it as the deployer would hand code execution inside the container the ability to redeploy, push images and read every secret in the project.
+
+The workflow writes its own Dockerfile at deploy time, overwriting the committed `backend/Dockerfile`. Keep the two describing the same container.
+
+There is no Cloud Run domain mapping — `me-west1` does not offer them. The public API hostname is the Cloudflare Worker in [`edge/`](../edge/README.md).
 
 ```bash
 # create/rotate a secret

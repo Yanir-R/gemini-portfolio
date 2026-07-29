@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import ReturnHome from '@/components/ReturnHome';
 import { writingService } from '@/services/writingService';
 import { WritingEntry, WRITING_KIND_LABEL, WRITING_KIND_STYLE } from '@/types/writing';
+import { formatIsoDate } from '@/utils/date';
 
 /*
  * The writing index.
@@ -16,19 +17,6 @@ import { WritingEntry, WRITING_KIND_LABEL, WRITING_KIND_STYLE } from '@/types/wr
  * know whether it interests them, and the `kind` chip already answers that for
  * anyone who does.
  */
-const formatDate = (iso: string): string => {
-    // Parsed as UTC deliberately: `new Date('2025-11-25')` is midnight UTC, and
-    // formatting that in a timezone behind UTC would show the 24th.
-    const [y, m, d] = iso.split('-').map(Number);
-    if (!y || !m || !d) return iso;
-    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        timeZone: 'UTC',
-    });
-};
-
 const Blog: React.FC = () => {
     const [entries, setEntries] = useState<WritingEntry[]>([]);
     const [loading, setLoading] = useState(true);
@@ -104,12 +92,9 @@ const Blog: React.FC = () => {
                             >
                                 {/* Date and kind both live in the meta column, so
                                     the badge starts at the same x on every row.
-
-                                    It used to sit inline after the title, which
-                                    meant its position was decided by where the
-                                    title happened to stop - one card had it on
-                                    the first line, the next halfway across the
-                                    second. A chip that moves per row reads as an
+                                    Inline after the title its position would be
+                                    decided by where the title happened to stop,
+                                    and a chip that moves per row reads as an
                                     accident rather than a column.
 
                                     Stacked rather than side by side because the
@@ -119,15 +104,15 @@ const Blog: React.FC = () => {
                                 <div className="flex gap-2.5 items-center sm:flex-col sm:gap-1.5 sm:items-start">
                                     {/* A minimum width only while the two sit on
                                         one row: "6 Apr 2026" is narrower than
-                                        "24 Jun 2026", which nudged the badge a
-                                        few pixels per card. Released from `sm`,
-                                        where they stack and the date's width
-                                        stops mattering. */}
+                                        "24 Jun 2026", which would nudge the
+                                        badge a few pixels per card. Released
+                                        from `sm`, where they stack and the
+                                        date's width stops mattering. */}
                                     <time
                                         dateTime={entry.date}
                                         className="min-w-[5.5rem] font-mono text-xs whitespace-nowrap sm:min-w-0 text-muted"
                                     >
-                                        {formatDate(entry.date)}
+                                        {formatIsoDate(entry.date, 'short')}
                                     </time>
                                     <span
                                         className={`rounded border px-1.5 py-0.5 font-mono text-[0.6rem] uppercase tracking-wider ${

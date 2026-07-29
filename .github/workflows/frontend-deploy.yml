@@ -58,15 +58,11 @@ jobs:
 
       - name: Build
         working-directory: ${{ env.FRONTEND_DIR }}
-        # Compile check only — this artifact is never deployed.
+        # Compile check only — this output is never deployed.
         #
-        # It used to set VITE_ALLOW_UNCONFIGURED_BUILD because the URLs arrived
-        # from repository secrets that this job deliberately does not have, so
-        # vite.config's guard would have failed it. They come from
-        # site.config.ts now, which is checked out with the code, so the guard
-        # is satisfied here for the same reason it is satisfied in the deploy —
-        # and leaving the flag would have kept announcing "this build is
-        # deliberately unconfigured" about a build that is fully configured.
+        # No VITE_ALLOW_UNCONFIGURED_BUILD: the site and backend URLs come from
+        # frontend/site.config.ts, which is checked out with the code, so
+        # vite.config's production guard is satisfied here without credentials.
         run: npm run build
 
       - name: Audit dependencies
@@ -100,25 +96,15 @@ jobs:
         working-directory: ${{ env.FRONTEND_DIR }}
         run: npm ci
 
-      # Deliberately rebuilds rather than reusing verify's dist/. The site and
-      # backend URLs are inlined into the bundle at build time, and verify
-      # builds with VITE_ALLOW_UNCONFIGURED_BUILD, so its output carries the
-      # development fallbacks. Sharing that artifact would deploy a frontend
-      # pointing at localhost.
+      # Builds again rather than reusing verify's output: jobs get separate
+      # runners and nothing is uploaded between them. The result is the same
+      # bundle, because every build value is committed rather than injected.
       #
-      # No VITE_* variables are injected here any more, on purpose. They used to
-      # come from repository secrets and variables, and because Vite inlines
-      # them at build time a value changed *after* a deploy silently did
-      # nothing - which is exactly what happened once: the frontend deployed at
-      # 09:15, the backend URL changed at 09:19, and the bundle went on pointing
-      # at the previous host while the site kept working.
-      #
-      # They live in frontend/site.config.ts now. None of them was ever a
-      # secret - the site URL is in every OpenGraph tag, the backend URL is in
-      # the bundle and the CSP - so committing them costs no confidentiality and
-      # removes the ordering trap entirely: changing one is a commit, and a
-      # commit is a deploy. Adding an override back here would reinstate the
-      # trap, because the environment wins over the file.
+      # No VITE_* variables are set here, on purpose. Build values come from
+      # frontend/site.config.ts, and Vite inlines them, so config that lives in
+      # the repository ships with the commit that changed it. An override here
+      # would take precedence over the file and reintroduce the split where a
+      # value changed after a deploy has no effect until the next build.
       - name: Build
         working-directory: ${{ env.FRONTEND_DIR }}
         run: npm run build

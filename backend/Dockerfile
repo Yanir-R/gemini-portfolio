@@ -2,17 +2,15 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Upgrade pip and install dependencies
+# Dependencies first, so the layer is reused when only application code changes.
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application files including docs. The COPY creates the tree, so there is
-# no mkdir step to keep in sync with the directory names.
-COPY docs/ /app/docs/
+# Everything else, docs/ included - the corpus the chat is grounded in ships
+# with the image rather than being fetched at runtime.
 COPY . .
 
-# Expose port 8080
 EXPOSE 8080
 
 # Single process, matching what the deploy workflow's generated Dockerfile runs.

@@ -4,17 +4,10 @@ import { API_ENDPOINTS } from '@/api/endpoints';
 import ReturnHome from '@/components/ReturnHome';
 
 /*
- * The bio, readable immediately.
- *
- * This page used to reveal its content one character every 30ms behind a "Skip
- * Typing" button. The skip button was the tell: the animation was understood to
- * be an obstacle even by the code that added it. Anyone who wanted to read the
- * page had to opt out of the page first, and anyone who left before finishing
- * left having read a fragment.
- *
- * The terminal chrome went with it. It was a costume rather than a frame - the
- * content is prose about a person, and dressing prose as shell output made it
- * harder to read for no gain.
+ * The bio, readable immediately: the whole document arrives at once, in the
+ * page's own type. It is prose about a person, so it is set as prose - no
+ * typing animation to opt out of, and no terminal chrome, which would be a
+ * costume rather than a frame.
  */
 const About: React.FC = () => {
     const [content, setContent] = React.useState<string>('');
@@ -87,10 +80,10 @@ const About: React.FC = () => {
             )}
 
             {!isLoading && !error && (
-                // Split on blank lines rather than rendering the whole document
-                // with `whitespace-pre-wrap`: that preserved the line breaks but
-                // gave every paragraph the same gap as a wrapped line, so the
-                // prose read as one undifferentiated block.
+                // Split on blank lines into real paragraphs. Rendering the whole
+                // document with `whitespace-pre-wrap` would keep the line breaks
+                // but give every paragraph the same gap as a wrapped line, so
+                // the prose would read as one undifferentiated block.
                 <div className="flex flex-col gap-5 mt-6 animate-fadeIn">
                     {content
                         .trim()

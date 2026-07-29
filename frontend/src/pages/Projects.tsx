@@ -5,15 +5,10 @@ import { projectService } from '@/services/projectService';
 import ReturnHome from '@/components/ReturnHome';
 
 /*
- * Loading and error states report, they do not perform.
- *
- * This page opened with a bouncing rocket, "Loading my projects..." and
- * "Fetching the latest from my portfolio" on every visit - three lines of
- * theatre for a request that usually resolves in under a second. The failure
- * state was worse: an emoji, an apology, and a `<details>` element hiding the
- * only sentence that told a visitor anything.
- *
- * Both now say what happened and what to do about it, in one line each.
+ * Loading and error states report, they do not perform. One line each: what
+ * happened, and what to do about it. The request usually resolves in under a
+ * second, so anything more elaborate is theatre - and a failure is the moment a
+ * visitor least wants an apology in place of the reason.
  */
 const Projects: React.FC = () => {
     const [projects, setProjects] = useState<Project[]>([]);
@@ -31,10 +26,9 @@ const Projects: React.FC = () => {
                 setError(null);
                 const fetched = await projectService.getAllProjects();
 
-                // Featured first, otherwise the order the backend returned. The
-                // previous version also pinned one project by slug, which meant
-                // the running order lived in two places and only one of them was
-                // editable without a deploy.
+                // Featured first, otherwise the order the backend returned.
+                // Nothing is pinned by slug here, so the running order stays
+                // editable in the markdown rather than needing a deploy.
                 const sorted = [...fetched].sort((a, b) => {
                     if (a.featured === b.featured) return 0;
                     return a.featured ? -1 : 1;
