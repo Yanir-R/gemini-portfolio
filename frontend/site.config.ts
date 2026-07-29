@@ -1,29 +1,21 @@
 /**
  * The public build configuration, committed on purpose.
  *
- * These three values used to live in GitHub secrets and variables, which is
- * where they started rather than where they belonged - none of them is a
- * secret. The site URL is printed in every OpenGraph tag, the backend URL is
- * inlined into the shipped bundle and named in the CSP, and the avatar URL is
- * fetched by every visitor's browser. Anyone can read all three from the
- * deployed site in a few seconds.
+ * None of these three values is a secret. The site URL is printed in every
+ * OpenGraph tag, the backend URL is inlined into the shipped bundle and named
+ * in the CSP, and the avatar URL is fetched by every visitor's browser - all
+ * three are readable from the deployed site in a few seconds.
  *
- * Keeping them out of the repository bought nothing and cost something real.
- * Vite inlines these at build time, so changing a GitHub variable does nothing
- * until the next build - and a variable changed *after* a deploy silently does
- * nothing at all. That is not hypothetical: it happened here. The frontend was
- * deployed at 09:15 and the backend URL was changed at 09:19, so the bundle
- * kept pointing at the old host, the site went on working, and the only way to
- * find out was to grep minified JavaScript.
- *
- * Committed, the failure cannot happen. Changing a value is a commit, a commit
- * is a deploy, and the value that shipped is the value in the file. It is also
- * reviewable in a pull request, which a repository variable never was.
+ * They live in the repository rather than in GitHub variables because Vite
+ * inlines them at build time. A value held outside the repository takes effect
+ * only on the next build, so changing one after a deploy does nothing at all
+ * and the bundle keeps pointing at the previous host while the site goes on
+ * working. Committed, changing a value is a commit, a commit is a deploy, and
+ * what shipped is what the file says. It is also reviewable in a pull request.
  *
  * Forking this: change the values below. An environment variable of the same
- * name still overrides each one, which is what local development and preview
- * builds use; CI deliberately passes none of them, so what is written here is
- * what production gets.
+ * name overrides each one, which is what local development and preview builds
+ * use; CI passes none of them, so what is written here is what production gets.
  *
  * What must NOT move here: anything that is actually a credential. API keys and
  * passwords stay in Secret Manager and GitHub secrets. The test is simple - if

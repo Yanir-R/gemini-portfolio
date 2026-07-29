@@ -19,25 +19,19 @@
         scroll-behavior: smooth;
 
         /*
-         * `clip`, not `hidden`, and no `width: 100vw`.
+         * `clip`, not `hidden`. Both stop horizontal scrolling, but
+         * `overflow-x: hidden` forces the computed `overflow-y` to `auto`, which
+         * makes html and body scroll containers - and once body scrolls
+         * internally the window does not scroll at all, leaving `window.scrollY`
+         * at 0 however far down the page you are. NavBar's scroll listener is on
+         * `window`, so it would stop hearing anything.
          *
-         * Those two were a self-inflicted loop. `width: 100vw` includes the
-         * scrollbar's width, so the page was always slightly wider than the
-         * viewport; `overflow-x: hidden` was then added to hide the horizontal
-         * scrollbar that caused. But `overflow-x: hidden` forces the computed
-         * `overflow-y` to `auto`, which turned html *and* body into scroll
-         * containers - and once body scrolls internally, the window does not
-         * scroll at all. `window.scrollY` stayed 0 no matter how far down the
-         * page you were.
-         *
-         * That broke two things at once: a phone could not reach the bottom of
-         * the home page, and NavBar's scroll listener (on `window`) fired only
-         * intermittently, which is why the wordmark animation behaved
-         * differently on different pages.
-         *
-         * `overflow-x: clip` prevents horizontal scrolling without creating a
-         * scroll container, so `overflow-y` stays `visible` and the viewport
-         * does the scrolling, as it should.
+         * `clip` prevents horizontal scrolling without creating a scroll
+         * container, so `overflow-y` stays `visible` and the viewport does the
+         * scrolling, as it should. There is no `width: 100vw` here either: that
+         * includes the scrollbar's width and makes the page wider than the
+         * viewport, which is what creates a horizontal overflow to suppress in
+         * the first place.
          */
         overflow-x: clip;
     }
@@ -82,47 +76,11 @@
     scrollbar-color: #1f2b34 #0b0f12;
 }
 
-.line-clamp-3 {
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
 input {
     @apply border-border;
     transition:
         border-color 160ms ease-out,
         background-color 160ms ease-out;
-}
-
-.social-link {
-    @apply text-muted transition-colors duration-200;
-}
-
-.social-link:hover {
-    color: var(--hover-color);
-}
-
-@layer utilities {
-    /* Nav underline. A 1px rule in the state colour, not a gradient sweep. */
-    .nav-link {
-        @apply relative px-3 py-2 text-muted transition-colors duration-200 hover:text-content;
-    }
-
-    .nav-link::after {
-        @apply content-[''] absolute left-0 -bottom-1 h-px w-0 bg-signal transition-all duration-200;
-    }
-
-    .nav-link:hover::after {
-        @apply w-full;
-    }
-
-    @media (max-width: 1024px) {
-        .nav-link {
-            @apply px-2 py-1.5 text-sm;
-        }
-    }
 }
 
 /*

@@ -4,6 +4,7 @@ import Markdown from '@/components/Markdown';
 import ReturnHome from '@/components/ReturnHome';
 import { writingService, stripWritingMetadata } from '@/services/writingService';
 import { WritingEntry, WRITING_KIND_LABEL, WRITING_KIND_STYLE } from '@/types/writing';
+import { formatIsoDate } from '@/utils/date';
 
 /*
  * One piece, read as a document.
@@ -18,17 +19,6 @@ import { WritingEntry, WRITING_KIND_LABEL, WRITING_KIND_STYLE } from '@/types/wr
  * summarising: the full text is here so it can be read and cited, and the
  * canonical link says where it actually lives.
  */
-const formatDate = (iso: string): string => {
-    const [y, m, d] = iso.split('-').map(Number);
-    if (!y || !m || !d) return iso;
-    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        timeZone: 'UTC',
-    });
-};
-
 const WritingDetail: React.FC = () => {
     const { slug } = useParams<{ slug: string }>();
     const [entry, setEntry] = useState<WritingEntry | null>(null);
@@ -133,7 +123,7 @@ const WritingDetail: React.FC = () => {
                         {WRITING_KIND_LABEL[entry.kind] ?? entry.kind}
                     </span>
                     <time dateTime={entry.date} className="text-muted">
-                        {formatDate(entry.date)}
+                        {formatIsoDate(entry.date, 'long')}
                     </time>
                     <span className="text-muted">{entry.source}</span>
                 </div>

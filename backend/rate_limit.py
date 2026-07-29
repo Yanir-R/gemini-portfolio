@@ -11,11 +11,11 @@ tier, spend real money). Two windows are enforced:
 
 State is per-process and in-memory, so the effective global ceiling is
 
-    GLOBAL_PER_MINUTE x processes-per-instance x max-instances
+    global_limit x processes-per-instance x max-instances
 
 Both deployment paths run a single process per instance (the workflow's
 generated Dockerfile and backend/Dockerfile both use plain uvicorn), and Cloud
-Run is capped at 4 instances, so the real ceiling is GLOBAL_PER_MINUTE x 4.
+Run is capped at 4 instances, so the chat ceiling is 12 x 4 = 48 answers a day.
 Switching to gunicorn with multiple workers would multiply it again - see the
 note in backend/Dockerfile.
 
@@ -27,18 +27,12 @@ different questions. Contact is a rate: how often may somebody send. Chat is a
 budget: how many answers is one visitor entitled to - which is only meaningful
 over a span long enough to matter, so it runs over a day.
 
-That budget is set by what is upstream, and the previous numbers were set
-against the wrong picture of it. This file used to claim the global default sat
-"well below the upstream free-tier quota"; it did not. Gemini's free tier grants
-20 requests per DAY per model, while the old default allowed 40 per MINUTE per
-instance - four instances of that is roughly ten thousand times the real
-ceiling. The limiter was tuned as though the binding constraint were per-minute
-throughput. It is per-day volume, and the site ran into it the first time
-anybody sent a few dozen messages in a row.
-
-So the real capacity of this site on the free tier is about 20 chat answers per
-day per model, 60 across the three the fallback chain tries. Everything below is
-sized to fit inside that rather than to look generous.
+The chat budget is set by what is upstream, and upstream is a daily volume
+rather than a per-minute throughput: Gemini's free tier grants 20 requests per
+DAY per model, so this site's real capacity is roughly 20 chat answers a day per
+model, 60 across the three the fallback chain tries. A per-minute window would
+renew 1,440 times a day and cap nothing that matters. Everything below is sized
+to fit inside the daily ceiling rather than to look generous.
 """
 
 import logging
@@ -78,11 +72,8 @@ class SlidingWindowLimiter:
     def __init__(self, per_key_limit: int, global_limit: int, window_seconds: int = WINDOW_SECONDS):
         self.per_key_limit = per_key_limit
         self.global_limit = global_limit
-        # Per-limiter rather than a module constant, because the two limiters
-        # are answering different questions. Contact is a rate - how often may
-        # somebody send - so a minute is right. Chat is a budget: how many
-        # answers is one visitor entitled to, which only means anything over a
-        # span long enough to matter.
+        # Per-limiter rather than a module constant: contact is a rate, so a
+        # minute is right, while chat is a daily budget. See the module docstring.
         self.window_seconds = window_seconds
         self._keys: Dict[str, Deque[float]] = {}
         self._global: Deque[float] = deque()
@@ -171,12 +162,10 @@ def client_key(request: Request) -> str:
     "1.2.3.4, <real client>". Reading the first entry would let anyone reset
     their own bucket at will.
 
-    That trailing-entry rule was right when clients reached Cloud Run directly,
-    and putting the Worker in front silently broke it: Google's front end then
-    sees a Cloudflare edge address, so every visitor collapsed onto one key and
-    the per-IP budget became a budget shared by everyone behind that PoP -
-    strangers rate-limiting each other while the limit that was supposed to stop
-    abuse stopped working. Hence the first branch.
+    That trailing entry is only the visitor when the visitor is the peer. Behind
+    the Worker it is a Cloudflare edge address shared by everyone at that PoP, so
+    the per-IP budget would become one budget for all of them - which is why a
+    verified request uses CF-Connecting-IP instead.
     """
     if getattr(request.state, "edge_verified", False):
         cf_connecting_ip = request.headers.get("cf-connecting-ip", "").strip()
@@ -213,12 +202,8 @@ def enforce_rate_limit(request: Request, limiter: "SlidingWindowLimiter", label:
     )
 
 
-# Ten answers per visitor per day, not per minute.
-#
-# Ten was always the intended allowance - enough to hold a real conversation
-# about the work, few enough that nobody drains the quota - but pinning it to a
-# minute meant it renewed 1,440 times a day, so it was never a cap on anything.
-# The number is unchanged; the span it covers is the fix.
+# Ten answers per visitor per day: enough to hold a real conversation about the
+# work, few enough that nobody drains the quota.
 #
 # The global ceiling is per instance and Cloud Run runs up to four, so the worst
 # case is 4 x 12 = 48 upstream calls a day, under the ~60 the three-model

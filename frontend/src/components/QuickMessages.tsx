@@ -5,14 +5,16 @@ interface QuickMessageButtonProps {
     title: string;
     description: string;
     message: string;
-    messageAvatar?: string;
     onClick: (
         message: string,
         nextQuestions?: QuickMessageOption[],
-        isEmailRelated?: boolean,
-        messageAvatar?: string
+        isEmailRelated?: boolean
     ) => void;
     nextQuestions?: QuickMessageOption[];
+    // Carried from the question that defines it. Suggestions stop after a
+    // question that asks to make contact, because what follows is the email
+    // exchange rather than another branch of the ladder.
+    isEmailRelated?: boolean;
     disabled: boolean;
 }
 
@@ -20,20 +22,15 @@ const QuickMessageButton: React.FC<QuickMessageButtonProps> = ({
     title,
     description,
     message,
-    messageAvatar,
     onClick,
     nextQuestions,
+    isEmailRelated,
     disabled,
 }) => {
-    const isEmailRelated =
-        message.toLowerCase().includes('contact') ||
-        message.toLowerCase().includes('email') ||
-        message.toLowerCase().includes('newsletter');
-
     return (
         <button
             type="button"
-            onClick={() => onClick(message, nextQuestions, isEmailRelated, messageAvatar)}
+            onClick={() => onClick(message, nextQuestions, isEmailRelated)}
             disabled={disabled}
             className="flex flex-col gap-0.5 items-start px-3 py-1.5 w-full text-left rounded border transition-colors duration-200 sm:py-2 border-border bg-ink-800 hover:border-border-hover disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -54,8 +51,7 @@ interface QuickMessagesProps {
     onMessageSelect: (
         message: string,
         nextQuestions?: QuickMessageOption[],
-        isEmailRelated?: boolean,
-        messageAvatar?: string
+        isEmailRelated?: boolean
     ) => void;
     currentQuestions: QuickMessageOption[];
     questionLevel: number;
@@ -95,8 +91,8 @@ export const QuickMessages: React.FC<QuickMessagesProps> = ({
                         title={question.title}
                         description={question.description}
                         message={question.message}
-                        messageAvatar={question.messageAvatar}
                         nextQuestions={question.nextQuestions}
+                        isEmailRelated={question.isEmailRelated}
                         onClick={onMessageSelect}
                         disabled={isLoading}
                     />

@@ -4,32 +4,30 @@ import { MESSAGE_STYLES, MESSAGE_AVATARS } from '@/constants/chat';
 
 interface MessageAvatarProps {
     type: ChatMessage['type'];
-    avatar?: string;
 }
 
 /*
  * Where Yanir's photograph comes from:
  *
- *   1. VITE_AVATAR_URL  - production. Set in CI, pointing at the same external
- *                         host the project screenshots already use.
- *   2. /profile.jpeg    - local development ONLY. Present on Yanir's machine
- *                         and listed in .gitignore, so it never enters the
+ *   1. VITE_AVATAR_URL  - resolved from site.config.ts at build time, or from
+ *                         the environment when one is set. Points at the same
+ *                         external host the project screenshots use.
+ *   2. /profile.jpeg    - development builds only. The file is gitignored, so
+ *                         it exists on a developer machine and never enters the
  *                         public repository or its permanent history.
  *   3. the letter mark  - whenever neither is available, and the reason a fresh
  *                         clone renders correctly with no binary in the tree.
  *
- * The dev-only guard on step 2 is load-bearing, not tidiness. Because the file
- * is gitignored it does not exist in a CI build, and `_redirects` maps `/*` to
- * index.html - so in production `/profile.jpeg` did not 404, it answered 200
- * with a page of HTML. The browser took that as an image, failed to decode it,
- * fired onError, and every re-render of the transcript tried again, which is
- * what made the avatar flicker between a broken image and the letter mark
- * several times a second. Asking for a file that cannot exist is the bug; the
- * flicker was only the symptom.
+ * The dev-only guard on step 2 is load-bearing. Because the file is gitignored
+ * it is absent from any CI build, and `_redirects` maps `/*` to index.html, so
+ * a production request for `/profile.jpeg` answers 200 with a page of HTML
+ * rather than 404. The browser cannot decode that as an image and every
+ * re-render asks again, which shows as an avatar flickering between a broken
+ * image and the letter mark. Not asking for a file that cannot exist is what
+ * avoids it.
  *
- * Step 3 also still catches a configured URL that breaks at runtime, so a dead
- * image host degrades to a mark rather than the browser's grey broken-image
- * icon.
+ * Step 3 also catches a configured URL that breaks at runtime, so a dead image
+ * host degrades to a mark rather than the browser's grey broken-image icon.
  */
 const CONFIGURED_AVATAR = import.meta.env.VITE_AVATAR_URL as string | undefined;
 const AVATAR_SRC = CONFIGURED_AVATAR || (import.meta.env.DEV ? '/profile.jpeg' : '');
@@ -60,10 +58,9 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({ type }) => {
                 width={32}
                 height={32}
                 // Not lazy. This sits in the first screenful of every visit, so
-                // deferring it saves no bandwidth and delays the one image on
-                // the page. It also makes the avatar measurably slower to
-                // appear than the text beside it, which reads as a broken
-                // image rather than a pending one.
+                // deferring it saves no bandwidth and only delays the one image
+                // on the page - arriving after the text beside it reads as a
+                // broken image rather than a pending one.
                 loading="eager"
                 onError={() => {
                     avatarKnownBroken = true;
@@ -77,11 +74,9 @@ export const MessageAvatar: React.FC<MessageAvatarProps> = ({ type }) => {
     return (
         <div
             aria-hidden="true"
-            className={`flex flex-shrink-0 justify-center items-center w-8 h-8 rounded font-mono text-[0.6rem] uppercase tracking-wider ${
-                MESSAGE_STYLES[type as keyof typeof MESSAGE_STYLES]
-            }`}
+            className={`flex flex-shrink-0 justify-center items-center w-8 h-8 rounded font-mono text-[0.6rem] uppercase tracking-wider ${MESSAGE_STYLES[type]}`}
         >
-            {MESSAGE_AVATARS[type as keyof typeof MESSAGE_AVATARS]}
+            {MESSAGE_AVATARS[type]}
         </div>
     );
 };

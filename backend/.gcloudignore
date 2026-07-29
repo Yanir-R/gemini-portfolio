@@ -1,26 +1,24 @@
-# Exclude version control
+# What `gcloud run deploy --source .` does not upload.
+#
+# The deploy workflow writes its own copy of this file before deploying, so this
+# one governs manual deploys from a developer machine. Keep the two in step.
+
 .git
 .gitignore
+.github
+.vscode
+README.md
 
-# Exclude node modules (will be installed during build)
-node_modules/
-
-# Exclude development files
-.env.local
-.env.*.local
+# Local environment and virtualenvs.
+.env*
+venv/
+.venv/
+__pycache__/
+*.pyc
 *.log
 
-# Include necessary files
-!package.json
-!package-lock.json
-!tsconfig.json
-
-# Include source code
-!src/
-
-# Include the gcloudignore itself
-!.gcloudignore 
-# Test and evaluation assets: not needed to serve traffic.
+# Test and evaluation assets: not needed to serve traffic, so they stay out of
+# the uploaded source and the image built from it.
 tests/
 evals/
 pytest.ini

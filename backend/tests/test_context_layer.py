@@ -1,8 +1,9 @@
-"""Regressions for the context layer.
+"""The context layer: what reaches the model, and what must never reach it.
 
-None of these call the Gemini API. They cover the parts that were wrong before
-and would be silently wrong again: what reaches the model, what must never reach
-it, and what the model must never be asked to answer without.
+None of these call the Gemini API. They pin the properties whose failures are
+silent - a corpus that quietly loses a section, an instruction that stops
+forbidding invention, history that reaches the model attributed to the wrong
+speaker - because none of them crash and the only symptom is a wrong answer.
 
 Run from the backend directory: `pytest`
 """
@@ -10,7 +11,6 @@ Run from the backend directory: `pytest`
 import re
 
 import pytest
-from google.genai import errors as genai_errors
 
 from conftest import ApiError
 
@@ -24,11 +24,6 @@ from gemini_helper import (
     get_gemini_response,
 )
 from prompt import NO_KNOWLEDGE_MESSAGE, build_contents, build_system_instruction
-
-
-def _api_error(code: int) -> genai_errors.APIError:
-    """See conftest.ApiError for why this is not the SDK constructor."""
-    return ApiError(code)
 
 
 # --- what the corpus contains -------------------------------------------------
@@ -91,15 +86,15 @@ def test_system_instruction_states_the_grounding_rules():
 
 
 def test_system_instruction_forbids_completing_a_technology_list():
-    """The general "never invent a technology" rule was already present and was
-    still not enough: asked for a tech stack, the chat named PostgreSQL, which
-    the corpus does not contain.
+    """A general "never invent a technology" rule is not enough on its own.
 
-    The mechanism is co-occurrence rather than defiance - a database that
-    commonly sits beside the ones listed is the natural completion of the
-    pattern - so the rule has to name that mechanism specifically. This asserts
-    it survives, because the failure it prevents is invisible: the invented item
-    is usually plausible, and was in fact true of Yanir when it happened.
+    Asked for a tech stack, a model completes the pattern: a database that
+    commonly sits beside the ones listed is the natural next token, so it gets
+    named whether or not the corpus contains it. The mechanism is co-occurrence
+    rather than defiance, and the instruction has to name that mechanism
+    specifically. The failure it prevents is invisible - an invented item is
+    plausible by construction, and may even be true - so the rule is asserted
+    rather than assumed to survive edits.
     """
     instruction = build_system_instruction(context.get_knowledge())
 
@@ -131,40 +126,9 @@ def test_empty_corpus_is_refused_without_calling_the_model(monkeypatch):
 # --- what a visitor sees when the upstream API refuses ------------------------
 
 
-class _FakeModels:
-    def __init__(self, outcomes):
-        self.outcomes = list(outcomes)
-        self.tried = []
-
-    def generate_content(self, model, contents, config):
-        self.tried.append(model)
-        outcome = self.outcomes.pop(0)
-        if isinstance(outcome, Exception):
-            raise outcome
-        return outcome
-
-
-class _FakeClient:
-    def __init__(self, models):
-        self.models = models
-
-
-def _patch_client(monkeypatch, outcomes) -> _FakeModels:
-    models = _FakeModels(outcomes)
-    # **kwargs rather than a fixed signature: the real client is constructed
-    # with whatever configuration the caller needs - http_options carries the
-    # request timeout, for one - and a stub that pins the argument list turns
-    # every future addition into a test failure about the stub rather than
-    # about the behaviour under test.
-    monkeypatch.setattr(
-        gemini_helper.genai, "Client", lambda **kwargs: _FakeClient(models)
-    )
-    return models
-
-
-def test_quota_exhaustion_advances_through_every_model(monkeypatch):
+def test_quota_exhaustion_advances_through_every_model(stub_gemini):
     """A 429 on one model is not the end of the road - the next one is tried."""
-    models = _patch_client(monkeypatch, [_api_error(429), _api_error(429), _api_error(429)])
+    models = stub_gemini(ApiError(429), ApiError(429), ApiError(429))
 
     answer = get_gemini_response("key", "hi", context.get_knowledge())
 
@@ -180,10 +144,10 @@ def test_quota_message_speaks_in_yanirs_voice_and_offers_the_email_route():
         assert plumbing not in BUSY_MESSAGE
 
 
-def test_auth_failure_is_not_reported_as_busy(monkeypatch):
+def test_auth_failure_is_not_reported_as_busy(stub_gemini):
     """403 is a configuration problem. Telling a visitor to try again shortly
     would be a lie, and retrying other models cannot help."""
-    models = _patch_client(monkeypatch, [_api_error(403)])
+    models = stub_gemini(ApiError(403))
 
     answer = get_gemini_response("key", "hi", context.get_knowledge())
 
@@ -236,8 +200,12 @@ def test_ui_chrome_is_not_replayed_as_conversation():
 
 
 def test_clicked_quick_replies_are_attributed_to_the_visitor():
-    """They were mapped to the assistant, so the model saw its own suggestions
-    as things it had already said."""
+    """A quick reply is something the visitor clicked, so it is a user turn.
+
+    Attributing it to the model would replay the suggestion as something the
+    model had already said, and the answer that follows contradicts a question
+    nobody asked.
+    """
     turns = main._to_model_turns(
         [
             main.ChatMessage(type="quick", content="Tell me about your experience"),
@@ -278,38 +246,31 @@ def test_debug_and_ungrounded_endpoints_are_gone():
     assert "/api/chat/status" in paths
 
 
-# ---------------------------------------------------------------------------
-# Regressions for the Qodo review on PR #7
-# ---------------------------------------------------------------------------
+# --- silent failures of corpus assembly ---------------------------------------
 #
-# Each of these was a real finding, reproduced before it was fixed. They are
-# here because all four are silent failures: nothing crashes, and the only
-# symptom is a wrong answer or a stale corpus.
+# None of these crash. The only symptom of each is a wrong answer or a corpus
+# that is stale or short a section, which is why they are pinned here.
 
 
-def test_corpus_without_profile_fails_closed(tmp_path, monkeypatch):
+def test_corpus_without_profile_fails_closed(tmp_path, monkeypatch, fresh_corpus_cache):
     """Project and writing documents alone must not count as a ready corpus.
 
-    Without this, an unreadable profile directory still reports the chat ready
-    and answers in Yanir's first person with nothing about Yanir behind it.
+    Failing open would let an unreadable profile directory report the chat
+    ready and answer in Yanir's first person with nothing about Yanir behind it.
     """
-    import context
-
     monkeypatch.setattr(context, "PROFILE_DIR", str(tmp_path / "absent-profile"))
-    context._cache = None
 
     knowledge = context._build()
+
     assert knowledge.is_empty, "a corpus with no profile section must be empty"
 
 
-def test_partial_corpus_is_not_cached(monkeypatch):
+def test_partial_corpus_is_not_cached(monkeypatch, fresh_corpus_cache):
     """A source that fails to read must not be cached away until its mtime moves.
 
     The fingerprint counts files, so it doubles as the expected section count;
     fewer sections than files means a read failed.
     """
-    import context
-
     real_build = context._build
 
     def build_missing_one():
@@ -321,13 +282,11 @@ def test_partial_corpus_is_not_cached(monkeypatch):
         )
 
     monkeypatch.setattr(context, "_build", build_missing_one)
-    context._cache = None
 
     knowledge = context.get_knowledge()
+
     assert not knowledge.is_empty, "the partial corpus is still served for this request"
     assert context._cache is None, "a partial corpus must not be cached"
-
-    context._cache = None
 
 
 def _response_with_finish_reason(name):
@@ -337,10 +296,12 @@ def _response_with_finish_reason(name):
     return type("Response", (), {"candidates": [candidate], "usage_metadata": None})()
 
 
-def test_truncated_response_is_reported(monkeypatch):
-    """MAX_TOKENS is invisible otherwise: the call succeeds and text looks fine."""
-    import gemini_helper
+def test_truncated_response_is_reported():
+    """A MAX_TOKENS finish must be reported to the caller.
 
+    Truncation is invisible otherwise: the call succeeds and `response.text`
+    reads like a normal reply right up to the point it stops mid-sentence.
+    """
     assert gemini_helper._log_usage("test", _response_with_finish_reason("MAX_TOKENS")) is True
     assert gemini_helper._log_usage("test", _response_with_finish_reason("STOP")) is False
 
@@ -349,11 +310,12 @@ def test_technical_questions_do_not_trigger_contact_flow():
     """A question about the work can contain a contact phrase and still be a question.
 
     "How does your email integration work?" holds "your email" but is asking
-    about a system, and answering it with the address prompt is the same false
-    positive the phrase list was meant to remove.
+    about a system, and answering it with the address prompt is the false
+    positive the phrase list plus the grammatical discriminator exist to avoid.
     """
-    import main
 
+    # Mirrors the condition in main.chat_with_files, which is inline in the
+    # endpoint and cannot be called without a full request round-trip.
     def routes_to_contact(message):
         lowered = message.lower()
         return any(p in lowered for p in main.CONTACT_INTENT_PHRASES) and not main._TOPIC_QUESTION.search(

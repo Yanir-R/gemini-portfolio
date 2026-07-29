@@ -1,37 +1,9 @@
 import axios from 'axios';
-import { apiClient } from '@/api/client';
+import { apiClient, toRequestError } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/endpoints';
-import { ChatMessage } from '@/types/chat';
 import { Project, ProjectsResponse, ProjectResponse } from '@/types/project';
 
-const CONNECTION_ERROR =
-    'Cannot connect to backend service. Please check if the server is running.';
-
-/**
- * Normalises anything thrown by axios into a single user-facing Error so every
- * call site reports failures the same way.
- */
-const toRequestError = (error: unknown, context: string): Error => {
-    console.error(`${context}:`, error);
-
-    if (axios.isAxiosError(error)) {
-        if (error.response) {
-            const { status, statusText, data } = error.response;
-            return new Error(`Server error (${status}): ${data?.detail || statusText}`, {
-                cause: error,
-            });
-        }
-        if (error.request) {
-            return new Error(CONNECTION_ERROR, { cause: error });
-        }
-    }
-
-    return new Error(`Request failed: ${error instanceof Error ? error.message : String(error)}`, {
-        cause: error,
-    });
-};
-
-export class ProjectService {
+class ProjectService {
     private static instance: ProjectService;
 
     private constructor() {}
@@ -52,17 +24,6 @@ export class ProjectService {
         }
     }
 
-    async getFeaturedProjects(): Promise<Project[]> {
-        try {
-            const response = await apiClient.get<ProjectsResponse>(API_ENDPOINTS.PROJECTS, {
-                params: { featured_only: true },
-            });
-            return response.data.projects || [];
-        } catch (error) {
-            throw toRequestError(error, 'Error fetching featured projects');
-        }
-    }
-
     async getProjectBySlug(slug: string): Promise<Project> {
         try {
             const response = await apiClient.get<ProjectResponse>(API_ENDPOINTS.PROJECT(slug));
@@ -76,50 +37,17 @@ export class ProjectService {
         }
     }
 
-    async chatWithProjects(message: string, conversationHistory?: ChatMessage[]): Promise<string> {
-        try {
-            // The unified chat endpoint already includes project data in its context.
-            const response = await apiClient.post(API_ENDPOINTS.CHAT, {
-                message,
-                conversation_history: conversationHistory || [],
-            });
-            return response.data.response;
-        } catch (error) {
-            console.error('Error chatting with projects:', error);
-            throw new Error('Failed to send message', { cause: error });
-        }
-    }
-
-    // Utility methods
-    filterProjectsByCategory(projects: Project[], category: string): Project[] {
-        if (!category || category === 'all') return projects;
-        return projects.filter(
-            (project) => project.category?.toLowerCase() === category.toLowerCase()
-        );
-    }
-
-    filterProjectsByStatus(projects: Project[], status: string): Project[] {
-        if (!status || status === 'all') return projects;
-        return projects.filter((project) => project.status?.toLowerCase() === status.toLowerCase());
-    }
-
-    filterProjectsByType(projects: Project[], type: string): Project[] {
-        if (!type || type === 'all') return projects;
-        return projects.filter(
-            (project) => project.project_type?.toLowerCase() === type.toLowerCase()
-        );
-    }
-
-    sortProjectsByFeatured(projects: Project[]): Project[] {
-        return [...projects].sort((a, b) => {
-            if (a.featured && !b.featured) return -1;
-            if (!a.featured && b.featured) return 1;
-            return 0;
-        });
-    }
-
+    /**
+     * The stack a write-up declares, most recognisable first.
+     *
+     * The ordered fields lead because they are what identifies a project at a
+     * glance. Everything else the write-up declares follows in the order the
+     * document lists it, so a `- **Video Processing**: ...` line reaches the
+     * card without being added here first. A project that names nothing shows
+     * no chips.
+     */
     getProjectTechStack(project: Project): string[] {
-        const techFields = [
+        const orderedFields = [
             'tech_frontend',
             'tech_backend',
             'tech_ai_ml',
@@ -129,12 +57,16 @@ export class ProjectService {
             'tech_deployment',
         ];
 
+        const remainingFields = Object.keys(project)
+            .filter((key) => key.startsWith('tech_') && !orderedFields.includes(key))
+            .sort();
+
         const techStack: string[] = [];
 
-        techFields.forEach((field) => {
+        [...orderedFields, ...remainingFields].forEach((field) => {
             const value = project[field as keyof Project] as string;
             if (value) {
-                // Handle comma-separated values and clean them up
+                // A single field often lists several technologies.
                 if (value.includes(',')) {
                     const parts = value.split(',').map((part) => part.trim());
                     techStack.push(...parts);
@@ -144,9 +76,7 @@ export class ProjectService {
             }
         });
 
-        // Process and clean the tech stack
-        const processedTechStack = this.processTechStack(techStack);
-        return this.prioritizeTechStack(processedTechStack);
+        return this.prioritizeTechStack(this.processTechStack(techStack));
     }
 
     private processTechStack(techStack: string[]): string[] {
@@ -156,7 +86,8 @@ export class ProjectService {
             const cleanTech = tech.trim();
             if (cleanTech.length === 0) return;
 
-            // Handle Firebase/Firestore splitting
+            // Firebase and Firestore are written as one entry in the markdown
+            // but are two separate things to have used, so they get a chip each.
             if (cleanTech.toLowerCase().includes('firebase/firestore')) {
                 processed.push('Firebase', 'Firestore');
             } else if (
@@ -169,7 +100,8 @@ export class ProjectService {
             }
         });
 
-        // Remove duplicates while preserving order
+        // Deduplicated case-insensitively, keeping the first spelling and the
+        // order the write-up used.
         const unique: string[] = [];
         const seen = new Set<string>();
 
@@ -184,10 +116,14 @@ export class ProjectService {
         return unique;
     }
 
+    /**
+     * The cards show only the first few chips, so the load-bearing technologies
+     * have to come first. Anything unranked sorts after the ranked entries,
+     * alphabetically, rather than in whatever order it was parsed.
+     */
     private prioritizeTechStack(techStack: string[]): string[] {
-        // Simple priority system - only technologies actually used in your projects
         const techPriorities: Record<string, number> = {
-            // AI & Advanced (Most impressive)
+            // AI & Advanced
             'Google Gemini AI': 100,
             'Google Cloud Vertex AI': 95,
 
@@ -219,21 +155,18 @@ export class ProjectService {
             const priorityB = techPriorities[b] || 0;
 
             if (priorityA !== priorityB) {
-                return priorityB - priorityA; // Higher priority first
+                return priorityB - priorityA;
             }
 
-            return a.localeCompare(b); // Alphabetical for same priority
+            return a.localeCompare(b);
         });
     }
 
     /**
      * The backend already returns a fetchable location: an absolute URL, or a
-     * root-relative path served from `public/` by the CDN. Nothing to resolve.
-     *
-     * This used to prefix root-relative paths with the backend host, which
-     * pointed screenshots at Cloud Run - the wrong destination, since moving
-     * static assets off a single-region container was the point of the CDN
-     * migration.
+     * root-relative path served from `public/` by the CDN. Nothing to resolve,
+     * and in particular nothing to prefix with the backend host, which would
+     * point screenshots at the single-region container the CDN exists to avoid.
      */
     getProjectMediaUrl(project: Project): string | null {
         return project.media_url ?? null;
@@ -243,13 +176,6 @@ export class ProjectService {
         const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.avi'];
         return videoExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
     }
-
-    isImageFile(filename: string): boolean {
-        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
-        return imageExtensions.some((ext) => filename.toLowerCase().endsWith(ext));
-    }
 }
 
-// Export singleton instance
 export const projectService = ProjectService.getInstance();
-export default projectService;

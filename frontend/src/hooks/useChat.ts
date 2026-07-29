@@ -39,9 +39,6 @@ export const useChat = () => {
                         ...prev,
                         {
                             type: 'system',
-                            // The system message type already renders in the
-                            // caution colour, so a warning emoji was saying the
-                            // same thing twice, less precisely.
                             content:
                                 "The assistant is offline: it has no notes to answer from, so it won't answer at all rather than guess.",
                         },
@@ -70,11 +67,15 @@ export const useChat = () => {
         };
     }, []);
 
+    /*
+     * The suggestions narrow as the conversation goes on: the openers lead to a
+     * follow-up pair, the pair leads to the contact prompt, and after that the
+     * composer is left alone. Three levels is the whole ladder.
+     */
     const updateQuickMessages = (nextQuestions?: QuickMessageOption[]) => {
         setQuickMessageState((prev) => {
             const nextLevel = prev.level + 1;
 
-            // If we're at level 0 and moving to level 1, show next questions
             if (nextLevel === 1 && nextQuestions) {
                 return {
                     currentQuestions: nextQuestions,
@@ -82,7 +83,6 @@ export const useChat = () => {
                 };
             }
 
-            // If we're at level 1 moving to level 2, show final question
             if (nextLevel === 2) {
                 return {
                     currentQuestions: [FINAL_QUESTION],
@@ -90,7 +90,6 @@ export const useChat = () => {
                 };
             }
 
-            // If we're beyond level 2, hide all quick messages
             return {
                 currentQuestions: [],
                 level: 3,
@@ -109,7 +108,8 @@ export const useChat = () => {
         setIsLoading(true);
         setShowQuickMessages(false);
 
-        // If message is from input (message state), use 'user' type
+        // A suggestion arrives as `messageText` with the composer empty;
+        // anything else is what the visitor typed themselves.
         const messageType = messageText && message === '' ? 'quick' : 'user';
 
         if (!messageText || isEmailRelated) {
@@ -122,7 +122,6 @@ export const useChat = () => {
         }
 
         try {
-            // Add the message to chat history with correct type
             setChatHistory((prev) => [
                 ...prev,
                 {
@@ -135,8 +134,8 @@ export const useChat = () => {
 
             if (result.success) {
                 if (result.email_collected) {
-                    // `confirm`, not `system`: this is the success case, and the
-                    // system style is the amber one used for warnings.
+                    // `confirm`, not `system`: this is the success case, and
+                    // `system` is the amber style reserved for warnings.
                     setChatHistory((prev) => [
                         ...prev,
                         {
@@ -146,14 +145,13 @@ export const useChat = () => {
                         },
                     ]);
 
-                    // Reset quick message state and show initial questions
+                    // The exchange is over, so the ladder starts again.
                     setQuickMessageState({
                         currentQuestions: INITIAL_QUESTIONS,
                         level: 0,
                     });
                     setShowQuickMessages(true);
                 } else {
-                    // Add AI response to chat history
                     setChatHistory((prev) => [
                         ...prev,
                         {
@@ -164,7 +162,8 @@ export const useChat = () => {
                         },
                     ]);
 
-                    // Only show quick messages if not in email collection mode
+                    // Suggestions stay hidden while an address is being asked
+                    // for, so nothing invites the visitor to change the subject.
                     if (!result.is_email_collection) {
                         if (nextQuestions) {
                             updateQuickMessages(nextQuestions);
@@ -177,37 +176,41 @@ export const useChat = () => {
                     ...prev,
                     {
                         type: 'system',
-                        // chatService already writes these messages for the
-                        // visitor, including the exact retry window on a 429.
-                        // Prefixing a cross undoes that work.
-                        //
-                        // `error` is optional on the result, and the previous
-                        // template literal hid that: an undefined error
-                        // rendered as the string "undefined" after the emoji.
+                        // chatService writes these messages for the visitor
+                        // already, including the exact retry window on a 429, so
+                        // they are shown verbatim. The fallback is there because
+                        // `error` is optional on the result and must never reach
+                        // the transcript as the string "undefined".
                         content:
                             result.error ??
                             'That message did not go through. Try sending it again.',
                     },
                 ]);
+
+                // The send failed, so the suggestions come back and the visitor
+                // has something to do other than retype. QuickMessages still
+                // renders nothing once the ladder has run out.
+                setShowQuickMessages(true);
             }
         } catch (error) {
             console.error('Error sending message:', error);
+            setShowQuickMessages(true);
         } finally {
+            // Visibility is decided by whichever branch above knows the outcome.
+            // Deciding it here as well would override those choices, and would
+            // read `quickMessageState` from the render that started this call
+            // rather than the value just set.
             setIsLoading(false);
             setMessage('');
-            // Only show quick messages again if we're not done with them
-            setShowQuickMessages(quickMessageState.level < 3);
         }
     };
 
     /*
      * True while the assistant has asked for an address and not yet received a
-     * valid one. The backend already reports this per reply; nothing was reading
-     * it, so the composer went on inviting questions about the work at the exact
-     * moment the visitor was being asked for their email.
+     * valid one, so the composer can say what it is waiting for.
      *
-     * Read off the last assistant turn rather than a separate flag, so an
-     * invalid address (which comes back with the same flag set again) keeps the
+     * Read off the last assistant turn rather than held as a separate flag: an
+     * invalid address comes back with the same flag set again, which keeps the
      * state on, and a successful submission clears it.
      */
     const lastReply = [...chatHistory]

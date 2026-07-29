@@ -3,37 +3,30 @@ import { useParams, Link } from 'react-router';
 import { Project, STATUS_STYLES, DEFAULT_STATUS_STYLE } from '@/types/project';
 import { projectService } from '@/services/projectService';
 import Markdown from '@/components/Markdown';
+import { stripMetadataSections } from '@/utils/markdown';
 
 /*
  * The write-up, set as a document.
  *
- * The body was previously wrapped in terminal chrome - three window dots, a
- * fake prompt reading `cat project-details.md` - and set in monospace at 14px.
- * It is prose about how something was built, and dressing prose as shell output
- * made a long read harder for the sake of a costume. Mono is reserved for the
- * things the machine reports about itself.
+ * The body is `project.content`: the real markdown the API serves, which is the
+ * same text context.py assembles into the chat's corpus. That is what makes
+ * "the site keeps one corpus" true rather than aspirational - what you read here
+ * and what the assistant answers from are the same bytes, and editing the
+ * markdown updates both.
  *
- * More consequentially, that body came from `utils/projectContent.ts`: a
- * hand-maintained second copy of each write-up, hardcoded in the frontend, 144
- * lines long, and already visibly diverged from the markdown the backend serves.
- * The API returns the real document as `project.content` - the same text
- * context.py assembles into the chat's corpus - so the page now renders that.
+ * It is prose about how something was built, so it is set as prose. Mono is
+ * reserved for the things the machine reports about itself.
  *
- * This is what makes "the site keeps one corpus" true rather than aspirational:
- * what you read here and what the assistant answers from are now the same
- * bytes, and editing the markdown updates both.
- *
- * The overview also had a fallback of "An innovative project showcasing modern
- * development practices", which is what a page says when it has nothing to say.
- * A missing overview now renders nothing.
+ * A missing overview renders nothing. A stand-in line would say only that the
+ * page has nothing to say.
  */
 const TECH_SHOWN_COLLAPSED = 6;
 
 /*
- * Sections the backend parses into metadata, which must not also be rendered as
- * body copy. `## Status` / `paused` already appears as a chip, `## Overview` as
- * the lede, and `## Media` is a bare image URL - printing them again at the foot
- * of the write-up read as a form someone forgot to delete.
+ * Sections the backend parses into metadata. `## Status` already appears as a
+ * chip, `## Overview` as the lede, and `## Media` is a bare image URL, so
+ * printing them again at the foot of the write-up would read as a form someone
+ * forgot to delete.
  */
 const METADATA_HEADINGS = [
     'Overview',
@@ -46,17 +39,6 @@ const METADATA_HEADINGS = [
     'Category',
     'License',
 ];
-
-const stripMetadataSections = (markdown: string): string =>
-    markdown
-        // Split on level-2 headings, keeping the heading with its section.
-        .split(/\n(?=## )/)
-        .filter((section) => {
-            const heading = section.match(/^## (.+)$/m)?.[1]?.trim();
-            return !heading || !METADATA_HEADINGS.includes(heading);
-        })
-        .join('\n')
-        .trim();
 
 const ProjectDetail: React.FC = () => {
     const { slug } = useParams<{ slug: string }>();
@@ -127,7 +109,9 @@ const ProjectDetail: React.FC = () => {
     const mediaUrl = projectService.getProjectMediaUrl(project);
     const techStack = projectService.getProjectTechStack(project);
     const isVideo = project.media && projectService.isVideoFile(project.media);
-    const content = project.content ? stripMetadataSections(project.content) : '';
+    const content = project.content
+        ? stripMetadataSections(project.content, METADATA_HEADINGS).trim()
+        : '';
     const canCollapse = techStack.length > TECH_SHOWN_COLLAPSED;
     const shownTech =
         canCollapse && !showAllTech ? techStack.slice(0, TECH_SHOWN_COLLAPSED) : techStack;

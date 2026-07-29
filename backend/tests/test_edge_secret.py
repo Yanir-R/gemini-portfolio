@@ -10,8 +10,6 @@ These tests do not reach the network. They set the secret on the module and
 drive the app through Starlette's test client.
 """
 
-import importlib
-
 import pytest
 from starlette.testclient import TestClient
 

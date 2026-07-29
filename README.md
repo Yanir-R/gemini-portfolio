@@ -6,10 +6,15 @@ A portfolio site with an AI assistant: React + TypeScript frontend on Cloudflare
 
 | Layer | Runs on | Why |
 | --- | --- | --- |
-| Frontend | Cloudflare Pages (static, global CDN) | It is a static bundle; a container running nginx was doing a CDN's job |
+| Frontend | Cloudflare Pages (static, global CDN) | It is a static bundle; serving it from a container would be a CDN's job done worse |
+| API front door | Cloudflare Worker (`edge/`) | Puts the API behind Cloudflare's rate limiting and bot handling, and adds the shared secret the backend requires |
 | Backend | Google Cloud Run (scale-to-zero) | Needs Python, calls Gemini, sends SMTP |
 | Secrets | Google Secret Manager | Never passed as plaintext Cloud Run env vars |
 | CI auth | Workload Identity Federation | Keyless — no service-account JSON exists anywhere |
+
+The browser never calls Cloud Run directly: it calls `api.<domain>`, the Worker
+forwards to the `run.app` URL with a shared secret, and the backend rejects
+anything arriving without it. See [edge/README.md](edge/README.md).
 
 ## Prerequisites
 
@@ -17,7 +22,7 @@ A portfolio site with an AI assistant: React + TypeScript frontend on Cloudflare
 -   Python 3.12 (3.9 is EOL and cannot install the current requirements)
 -   Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
 -   Google Cloud project with billing enabled — Cloud Build and Artifact Registry refuse to run without it, even inside the free tier
--   Cloudflare account (free) for frontend hosting
+-   Cloudflare account (free) for the frontend (Pages) and the API front door (Workers)
 
 ## Quick Start
 
@@ -58,7 +63,15 @@ Run one process. The rate limiter (below) keeps its counters in-process, so mult
 
 ### Frontend
 
-Build-time only — Vite inlines these into the bundle, so changing them requires a rebuild, not a restart.
+The public build values are committed in **`frontend/site.config.ts`**: the site
+URL, the backend URL and an optional avatar URL. Forking? Change those three.
+
+None of them is a secret — all three are readable from the deployed site — and
+committing them is what keeps the deploy honest: Vite inlines them at build
+time, so a value held in a repository variable takes effect only on the next
+build, and changing one after a deploy does nothing at all.
+
+For local work, an environment variable of the same name overrides each:
 
 ```bash
 # frontend/.env.development
@@ -66,9 +79,11 @@ VITE_BACKEND_URL=http://localhost:8000
 VITE_SITE_URL=http://localhost:3000
 ```
 
-`VITE_SITE_URL` fills the canonical and OpenGraph URLs in `index.html`. A **production build fails** if it or `VITE_BACKEND_URL` is missing — a pinned default was previously the only reason production resolved correctly, which hid the injected values being dropped. Never hardcode a domain in the markup.
-
-`VITE_ALLOW_UNCONFIGURED_BUILD=true` opts out and substitutes localhost placeholders. CI `verify` uses it to compile without secrets; never set it on a build you intend to deploy.
+A **production build fails** if `url` or `backendUrl` resolves to empty, rather
+than shipping a bundle pointing at localhost. `VITE_ALLOW_UNCONFIGURED_BUILD=true`
+opts out for a deliberately config-less build; never set it on a build you
+intend to deploy. Never hardcode a domain in the markup — `index.html` uses a
+`%VITE_SITE_URL%` placeholder that the build substitutes.
 
 ### Backend
 
@@ -82,18 +97,27 @@ YOUR_EMAIL=where_contact_mail_lands@gmail.com
 # optional
 ALLOWED_ORIGINS=https://your-frontend.example      # comma-separated, added to the CORS allowlist
 FRONTEND_PROD_URL=https://your-frontend.example
+ORIGIN_SHARED_SECRET=...   # must match the edge Worker's EDGE_SECRET
 ```
+
+`ORIGIN_SHARED_SECRET` unset means "do not enforce", which is what lets the
+Worker be rolled out before the backend starts requiring it. Once set, every
+request that does not carry the matching header gets a 403 — including a direct
+call to the `run.app` URL. Leave it unset for local development.
 
 ### Rate limiting
 
 `/chat-with-files` and `/api/contact` are unauthenticated and cost money or quota per call, so both a per-client and a global window are enforced. Defaults:
 
 ```bash
-RATE_LIMIT_CHAT_PER_IP_PER_MINUTE=10
-RATE_LIMIT_CHAT_GLOBAL_PER_MINUTE=40
+RATE_LIMIT_CHAT_PER_IP_PER_DAY=10
+RATE_LIMIT_CHAT_GLOBAL_PER_DAY=12
+RATE_LIMIT_CHAT_WINDOW_SECONDS=86400
 RATE_LIMIT_CONTACT_PER_IP_PER_MINUTE=3
 RATE_LIMIT_CONTACT_GLOBAL_PER_MINUTE=15
 ```
+
+The two limiters use different windows because they answer different questions. Contact is a rate — how often may somebody send. Chat is a budget: Gemini's free tier grants 20 requests per **day** per model, so a per-minute window would renew 1,440 times a day and cap nothing that matters.
 
 The global window is the cost guard: a per-IP limit alone is defeated by spoofing or a botnet. See `backend/rate_limit.py`.
 
@@ -107,11 +131,10 @@ Secrets:
 
 | Name | What |
 | --- | --- |
-| `GCP_DEV_PROJECT_ID`, `GCP_PROD_PROJECT_ID` | Target GCP project |
+| `GCP_DEV_PROJECT_ID` | Target GCP project |
 | `GCP_SA_EMAIL` | Deploy service account |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource path |
 | `EMAIL_ADDRESS`, `YOUR_EMAIL` | SMTP sender / recipient |
-| `VITE_BACKEND_URL` | Backend origin baked into the frontend bundle |
 | `CLOUDFLARE_API_TOKEN` | Scope: Account → Cloudflare Pages → Edit |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account |
 
@@ -121,12 +144,18 @@ Variables:
 | --- | --- |
 | `CLOUDFLARE_PAGES_PROJECT` | Pages project name |
 | `CLOUDFLARE_PAGES_ENABLED` | `true` arms the Pages deploy — set this **last** |
-| `SITE_URL` | Public origin for canonical/OG tags |
+| `GCP_RUNTIME_SA` | Identity the Cloud Run container runs as, distinct from the deploy account |
 | `ALLOWED_ORIGINS` | Extra CORS origins for the backend |
+
+The frontend's URLs are not in this list: they live in `frontend/site.config.ts`
+for the reason given above.
 
 There is deliberately **no `GCP_SA_KEY`**. Authentication uses Workload Identity Federation, and the OIDC provider carries an attribute condition restricting it to this repository, so no long-lived JSON key is ever created or stored.
 
-`GEMINI_API_KEY` and `EMAIL_PASSWORD` are **not** GitHub secrets for the backend deploy — they live in Secret Manager and are attached with `--set-secrets`, keeping them out of Cloud Run revision metadata.
+`GEMINI_API_KEY`, `EMAIL_PASSWORD` and `ORIGIN_SHARED_SECRET` are **not** GitHub secrets for the backend deploy — they live in Secret Manager and are attached with `--set-secrets`, keeping them out of Cloud Run revision metadata.
+
+The Worker in `edge/` is deployed by hand (`npx wrangler deploy`), not by CI, and
+its `EDGE_SECRET` lives only in Cloudflare.
 
 ## API
 
@@ -164,6 +193,7 @@ the corpus and visitor messages as data rather than instructions.
 backend/docs/
 ├── profile/     # markdown the chat answers from — published
 ├── projects/    # per-project markdown, drives /api/projects and the chat
+├── writing/     # published articles, drives /api/writing and the chat
 └── templates/   # placeholders for forks; never sent to the model
 ```
 
@@ -183,6 +213,7 @@ covers what can be asserted offline and runs in CI on every pull request.
 
 -   [Frontend README](frontend/README.md)
 -   [Backend README](backend/README.md)
+-   [Edge Worker README](edge/README.md)
 -   [Workflows README](.github/workflows/README.md)
 
 ## Contributing

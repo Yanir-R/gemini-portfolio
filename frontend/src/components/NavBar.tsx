@@ -5,21 +5,17 @@ import SocialLinks from '@/components/SocialLinks';
 import NavLinks from '@/components/NavLinks';
 
 /*
- * The wordmark was a gradient that swapped hue on hover, next to a lightning
- * bolt that faded in and rotated. Two animations and four colours on the one
- * element whose job is to sit still and say whose site this is.
+ * The header has exactly one animation, and it carries information rather than
+ * decorating: on a narrow screen the wordmark flies into the hamburger as you
+ * scroll down and comes back out when you scroll up, so the header explains
+ * where the name went rather than just deleting it. The distance is measured
+ * from the two elements rather than guessed, so the name lands in the
+ * hamburger's mouth at any viewport width.
  *
- * It now has exactly one animation, and it carries information: on a narrow
- * screen the name flies into the hamburger as you scroll down and comes back
- * out when you scroll up, so the header quietly explains where the name went
- * rather than just deleting it. The distance is measured from the two elements
- * rather than guessed, so the name genuinely lands in the hamburger's mouth at
- * any viewport width.
- *
- * Desktop keeps the name put: there is no hamburger above `lg`, so there would
- * be nothing for it to fly into. The CSS neutralises the transform at that
- * breakpoint, which is why the eaten state is a class rather than an inline
- * style that would win over any media query.
+ * Desktop keeps the name put: there is no hamburger above `lg` for it to fly
+ * into. The CSS neutralises the transform at that breakpoint, which is why the
+ * eaten state is a class rather than an inline style that would win over any
+ * media query.
  */
 
 // Ignore sub-pixel scroll jitter, which would otherwise flip the state
@@ -92,13 +88,10 @@ const NavBar: React.FC = () => {
             // Scrolling with the menu open means the visitor has moved on from
             // it, so it closes rather than sitting over content being read.
             //
-            // This works only because the menu no longer locks body scroll. It
-            // used to add `overflow: hidden` to the body, which meant a scroll
-            // gesture with the menu open produced no scroll and therefore no
-            // event: the page refused to move and the panel stayed put, which
-            // is exactly the behaviour that felt broken. A scroll lock is for a
-            // full-screen overlay; this is a small dropdown, and letting the
-            // page move is both simpler and what a visitor expects.
+            // This works only because the menu leaves body scroll alone. A
+            // scroll lock would swallow the gesture and with it this event, so
+            // the page would refuse to move and the panel would stay put. A
+            // lock is for a full-screen overlay; this is a small dropdown.
             if (isMenuOpenRef.current) {
                 closeMenu();
                 lastScrollY.current = y;
@@ -144,23 +137,18 @@ const NavBar: React.FC = () => {
             {/* Spacer matching the fixed bar's height. */}
             <div className="h-16 lg:h-20" />
 
-            {/* The page background, not a surface of its own.
-                A scrolled state used to add `bg-ink-900/85`, a bottom border and
-                a backdrop blur, which drew a lighter band with a hairline under
-                it across the top of every page.
+            {/* Below `lg` there is no bar at all: the header is transparent and
+                its two controls carry their own small backgrounds, floating over
+                the page. Nothing spans the width, so there is no row to feel
+                sticky, and the hamburger never leaves - which matters, because
+                hiding the header on scroll would take the only way into the menu
+                with it.
 
-                Taking the exact page colour removed the band, but a bar that
-                stays put is still a bar. Hiding the whole header on scroll was
-                worse again - it took the only way into the menu with it, and
-                scrolling with no navigation anywhere reads as broken rather than
-                as clean.
-
-                So below `lg` there is no bar at all: the header is transparent
-                and its two controls carry their own small backgrounds, floating
-                over the page. Nothing spans the width, so there is no row to
-                feel sticky, and the hamburger never leaves. Above `lg` the bar
-                stays opaque, because the nav links and social icons do span the
-                width and would otherwise sit on top of the text. */}
+                Above `lg` the bar is opaque in the exact page colour, because
+                the nav links and social icons do span the width and would
+                otherwise sit on top of the text. Taking the page colour rather
+                than a tint keeps it from drawing a lighter band across the top
+                of every page. */}
             <header className="fixed top-0 right-0 left-0 z-50 lg:bg-ink-900">
                 <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16 lg:h-20">

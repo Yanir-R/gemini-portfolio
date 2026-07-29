@@ -14,14 +14,13 @@ from rate_limit import chat_limiter, contact_limiter, enforce_rate_limit
 from pydantic import BaseModel, EmailStr, Field
 from typing import Dict, List, Optional
 import os
-from os import getenv
 import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import smtplib
 import logging
 import re
-from email_validator import EmailNotValidError, validate_email  
+from email_validator import EmailNotValidError, validate_email
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,14 +31,10 @@ logger = logging.getLogger(__name__)
 INTERNAL_ERROR_DETAIL = "Internal server error"
 
 # Replies for the contact flow, in one place so the three paths that can accept
-# an address cannot drift into three different voices. They previously did: one
-# opened "✉️ 👱🏻‍♂️ ✉️" and ran four emoji-laden paragraphs, another was a flat
-# one-liner, and the prompt that asked for the address opened with "I'd be happy
-# to help with that!".
-#
-# The site answers in Yanir's first person and its whole argument is that it does
-# not overstate. A gushing confirmation is the one message a visitor is
-# guaranteed to read, so it is the worst place to sound like a different product.
+# an address cannot drift into three different voices. The site answers in
+# Yanir's first person and its whole argument is that it does not overstate. A
+# confirmation is the one message a visitor is guaranteed to read, so it is the
+# worst place to sound like a different product.
 EMAIL_RECEIVED_MESSAGE = (
     "Got it - that's in my inbox and I'll reply from there. "
     "Anything else you want to ask while you're here?"
@@ -62,32 +57,36 @@ EMAIL_SEND_FAILED_MESSAGE = (
     "Write to rotyanir@gmail.com directly and it will reach me."
 )
 
-# Phrases that express an intent to make contact, as opposed to any message that
-# happens to contain the word "email".
+# Detecting an intent to make contact, in two parts.
 #
-# The previous test was `"contact" in message or "email" in message or
-# "newsletter" in message`, which intercepted the question before it ever reached
-# the model - so "how does your backend send email?" was answered with a request
-# for the visitor's address instead of an answer about the backend. On a site
-# whose argument is that it answers from its sources, silently refusing to answer
-# a legitimate question is the most expensive bug available.
-# A message can contain a contact phrase and still be a question about the work.
-# "How does your email integration work?" holds "your email" but is asking about a
-# system, not for an address, and answering it with the contact prompt is the same
-# class of false positive the phrase list was introduced to remove.
+# Matching a bare "contact"/"email"/"newsletter" anywhere in the message would
+# intercept it before it ever reached the model, so "how does your backend send
+# email?" would be answered with a request for the visitor's address instead of
+# an answer about the backend. On a site whose argument is that it answers from
+# its sources, silently refusing a legitimate question is the most expensive
+# failure available. Hence phrases that express the intent itself.
 #
-# The discriminator is grammatical rather than a list of technical nouns, which
-# would need extending forever: a question *about* something is third person or
-# addressed to Yanir's practice ("how does...", "how do you...", "what did you
-# learn..."), while a contact request is first person and addressed at him
-# ("how do I reach you", "can I contact you"). Note "how do you" is excluded and
-# "how do I" is not - that single word is the difference.
+# A message can still contain a contact phrase and be a question about the work:
+# "how does your email integration work?" holds "your email" but asks about a
+# system. _TOPIC_QUESTION vetoes those. The discriminator is grammatical rather
+# than a list of technical nouns, which would need extending forever: a question
+# *about* something is third person or addressed to Yanir's practice ("how
+# does...", "how do you...", "what did you learn..."), while a contact request is
+# first person and addressed at him ("how do I reach you", "can I contact you").
+# Note "how do you" is excluded and "how do I" is not - that single word is the
+# difference.
 _TOPIC_QUESTION = re.compile(
     r"\bhow (?:does|did|is|are|was|do you|would you|should you)\b"
     r"|\bwhat (?:did|do) you (?:learn|use|build|do|run|choose)\b"
     r"|\bwhy (?:does|did|is|are|do you)\b",
     re.IGNORECASE,
 )
+
+# An address on its own, versus one embedded in a sentence. Both are deliberately
+# loose: `validate_email` is the authority on whether an address is real, and
+# these only decide which part of the message to hand it.
+_EMAIL_ONLY_RE = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+_EMAIL_IN_TEXT_RE = re.compile(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}')
 
 CONTACT_INTENT_PHRASES = (
     "your email",
@@ -108,7 +107,7 @@ load_dotenv()
 def validate_email_config():
     required_vars = ["EMAIL_ADDRESS", "EMAIL_PASSWORD", "YOUR_EMAIL"]
     missing_vars = [var for var in required_vars if not os.getenv(var)]
-    
+
     if missing_vars:
         logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
         return False
@@ -117,10 +116,9 @@ def validate_email_config():
 if not validate_email_config():
     logger.warning("Email configuration is incomplete. Email functionality will not work!")
 
-FRONTEND_PROD_URL = getenv("FRONTEND_PROD_URL", "")
-FRONTEND_DEV_URL = getenv("FRONTEND_DEV_URL", "http://localhost:3000")
-FRONTEND_VITE_URL = getenv("FRONTEND_VITE_URL", "http://127.0.0.1:3000")
-BACKEND_URL = getenv("BACKEND_URL", "http://127.0.0.1:8000")
+FRONTEND_PROD_URL = os.getenv("FRONTEND_PROD_URL", "")
+FRONTEND_DEV_URL = os.getenv("FRONTEND_DEV_URL", "http://localhost:3000")
+FRONTEND_VITE_URL = os.getenv("FRONTEND_VITE_URL", "http://127.0.0.1:3000")
 
 # Local dev hosts are always permitted. Deployed origins are assembled from the
 # FRONTEND_* vars above plus a comma-separated ALLOWED_ORIGINS, so pointing the
@@ -137,7 +135,7 @@ _DEV_ORIGINS = [
 
 def _build_allowed_origins() -> List[str]:
     configured = [FRONTEND_PROD_URL, FRONTEND_DEV_URL, FRONTEND_VITE_URL]
-    configured += getenv("ALLOWED_ORIGINS", "").split(",")
+    configured += os.getenv("ALLOWED_ORIGINS", "").split(",")
 
     origins: List[str] = []
     seen = set()
@@ -153,20 +151,19 @@ allowed_origins = _build_allowed_origins()
 logger.info("CORS allowed origins: %s", allowed_origins)
 
 # Request-size ceilings. Rate limiting caps how *often* a client can call these
-# endpoints; nothing capped how *large* a single call could be, so one request
-# could carry an arbitrarily long message and an unbounded history array - both
-# of which are read, iterated and partly forwarded upstream. Rejecting oversized
-# input at the schema means FastAPI answers 422 before any of that happens.
+# endpoints, not how *large* a single call may be: without these, one request
+# could carry an arbitrarily long message and an unbounded history array, all of
+# which is read, iterated and partly forwarded upstream. Declaring the limits on
+# the schema means FastAPI answers 422 before any of that happens.
 MAX_MESSAGE_CHARS = 2_000
 MAX_HISTORY_MESSAGES = 40
 MAX_HISTORY_CONTENT_CHARS = 4_000
 
 # Frontend message types that represent something the visitor actually said.
-# 'system' and 'initial' are UI chrome (the greeting, error banners); replaying
-# them as conversation turns taught the model that its own greeting was part of
-# the dialogue. 'quick' is a canned question the visitor clicked, so it is a
-# user turn - it was previously mapped to the assistant, which meant every
-# quick-reply question arrived attributed to the wrong speaker.
+# Anything not listed here is UI chrome - 'system' and 'initial' are the greeting
+# and error banners, and replaying them as conversation turns would teach the
+# model that its own greeting was part of the dialogue. 'quick' is a canned
+# question the visitor clicked, so it counts as a user turn.
 _USER_MESSAGE_TYPES = frozenset({"user", "quick"})
 _MODEL_MESSAGE_TYPES = frozenset({"ai"})
 
@@ -185,8 +182,13 @@ class ChatRequest(BaseModel):
     collected_email: Optional[EmailStr] = None
 
 class ContactRequest(BaseModel):
-    email: str
-    message: str
+    # EmailStr rather than str, matching the chat paths, and a length ceiling on
+    # the message. Both are declared here rather than checked in the handler so
+    # a malformed request is answered 422 before it reaches one - which also
+    # means it never spends a rate-limit slot, since FastAPI validates the body
+    # before the endpoint runs.
+    email: EmailStr
+    message: str = Field(max_length=MAX_MESSAGE_CHARS)
 
 
 def _to_model_turns(history: Optional[List[ChatMessage]]) -> List[Dict[str, str]]:
@@ -202,6 +204,46 @@ def _to_model_turns(history: Optional[List[ChatMessage]]) -> List[Dict[str, str]
         turns.append({"role": role, "content": message.content})
     return turns
 
+
+def _chat_reply(
+    response: str,
+    email_collected: bool = False,
+    is_email_collection: bool = False,
+) -> Dict[str, object]:
+    """One shape for every chat reply that is not a model answer.
+
+    The two flags drive the frontend's collection state, so a reply that omits
+    one leaves the client guessing at it.
+    """
+    return {
+        "response": response,
+        "email_collected": email_collected,
+        "is_email_collection": is_email_collection,
+    }
+
+
+async def _deliver_collected_email(
+    email: str, message_content: str, context: str
+) -> Dict[str, object]:
+    """Emails an address collected in chat and returns the reply to show for it.
+
+    Both places that accept an address route through here so a delivery failure
+    reads the same either way.
+    """
+    try:
+        await _send_contact_email(email, message_content)
+    except HTTPException:
+        # A delivery failure is ours, not the visitor's. Reporting it as a 500
+        # would leave them staring at a generic error with no idea their message
+        # went nowhere.
+        logger.exception("Contact delivery failed for %s", context)
+        return _chat_reply(EMAIL_SEND_FAILED_MESSAGE)
+
+    # The address is delivered by email, which is the record. There is no reason
+    # for it to sit in log storage as well.
+    logger.info("Email notification sent for %s", context)
+    return _chat_reply(EMAIL_RECEIVED_MESSAGE, email_collected=True)
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 app = FastAPI()
@@ -209,24 +251,23 @@ app = FastAPI()
 # Shared secret proving a request arrived through Cloudflare rather than by
 # calling the run.app URL directly.
 #
-# CORS does not do this job and never did. It is enforced by browsers, on
-# browsers - curl, a script, or anything that simply omits an Origin header is
-# unaffected by it. So while the allowlist above stops another website's
-# JavaScript using this API, it does nothing about the case that actually
-# costs something: somebody pointing a loop at /chat-with-files and burning
-# the Gemini quota, or saturating the 40/minute global limiter so real
-# visitors get 429s.
+# CORS does not do this job: it is enforced by browsers, on browsers, so curl, a
+# script, or anything that omits an Origin header is unaffected. The allowlist
+# above stops another website's JavaScript using this API, but does nothing about
+# the case that actually costs something - somebody pointing a loop at
+# /chat-with-files and burning the Gemini quota, or saturating the global limiter
+# so real visitors get 429s.
 #
-# The edge injects this header on every request it forwards. The value has to
-# be unguessable, because any client can send an arbitrary header - the header
-# is not a secret channel, the VALUE is the secret. Cloudflare's own docs make
-# the same point about forwarded client-certificate headers.
+# The edge injects this header on every request it forwards. The value has to be
+# unguessable, because any client can send an arbitrary header: the header is not
+# a secret channel, the VALUE is the secret. Cloudflare's own docs make the same
+# point about forwarded client-certificate headers.
 #
-# Unset means unenforced, deliberately. It lets the header be introduced at
-# the edge and the frontend be repointed before enforcement begins, so no
-# ordering of those deploys can strand the site talking to an API that has
-# started rejecting it. Setting the variable is the last step, not the first.
-ORIGIN_SHARED_SECRET = getenv("ORIGIN_SHARED_SECRET", "").strip()
+# Unset means unenforced, deliberately. That lets the header be introduced at the
+# edge and the frontend be repointed before enforcement begins, so no ordering of
+# those deploys can strand the site talking to an API that has started rejecting
+# it. Setting the variable is the last step, not the first.
+ORIGIN_SHARED_SECRET = os.getenv("ORIGIN_SHARED_SECRET", "").strip()
 
 # Paths that must stay reachable without the header. Cloud Run's own health
 # probing and any uptime check call these, and they neither cost quota nor
@@ -292,10 +333,10 @@ async def health_check():
 async def chat_status():
     """Whether the chat has anything to ground its answers in.
 
-    Replaces /check-paths, which returned absolute server filesystem paths, the
-    working directory and a listing of the document filenames to any anonymous
-    caller. The frontend only ever used it to decide whether to show a "no
-    content available" banner, which is one boolean.
+    One boolean, because that is all the frontend needs to decide whether to show
+    its "no content available" banner. Reporting filesystem paths, the working
+    directory or the document filenames would hand an anonymous caller a map of
+    the container for no gain.
     """
     knowledge = get_knowledge()
     return {"knowledge_ready": not knowledge.is_empty}
@@ -303,7 +344,7 @@ async def chat_status():
 @app.post("/chat-with-files")
 async def chat_with_files(chat_request: ChatRequest, request: Request):
     # Shape only. The visitor's message is their words, not ours to retain in
-    # log storage; the previous line logged the entire request object verbatim.
+    # log storage.
     logger.info(
         "Chat request: %d chars, %d history messages",
         len(chat_request.message),
@@ -314,106 +355,51 @@ async def chat_with_files(chat_request: ChatRequest, request: Request):
 
         if not GEMINI_API_KEY:
             raise HTTPException(
-                status_code=500, 
+                status_code=500,
                 detail="GEMINI_API_KEY not found in environment variables"
             )
-        
-        # Check if message contains ONLY an email address
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+        # A message that is nothing but an address: the visitor is leaving it,
+        # whatever the conversation was doing before.
         message = chat_request.message.strip()
-        is_just_email = re.match(email_pattern, message)
-        
-        if is_just_email:
+        if _EMAIL_ONLY_RE.match(message):
             try:
-                email = message
-                valid = validate_email(email)
-                email = valid.email
-                
-                contact_request = ContactRequest(
-                    email=email,
-                    message="Address submitted in chat with no accompanying message"
-                )
-
-                try:
-                    await contact(contact_request)
-                except HTTPException:
-                    # A delivery failure is ours, not the visitor's. Reporting it
-                    # as a 500 would leave them staring at a generic error with
-                    # no idea their message went nowhere.
-                    logger.exception("Contact delivery failed for direct email submission")
-                    return {
-                        "response": EMAIL_SEND_FAILED_MESSAGE,
-                        "email_collected": False,
-                        "is_email_collection": False
-                    }
-
-                # The address itself is delivered by email, so there is no reason
-                # for a visitor's address to also sit in log storage.
-                logger.info("Email notification sent for direct email submission")
-
-                return {
-                    "response": EMAIL_RECEIVED_MESSAGE,
-                    "email_collected": True,
-                    "is_email_collection": False
-                }
+                email = validate_email(message).email
             except EmailNotValidError:
-                return {
-                    "response": EMAIL_INVALID_MESSAGE,
-                    "email_collected": False,
-                    "is_email_collection": True
-                }
+                return _chat_reply(EMAIL_INVALID_MESSAGE, is_email_collection=True)
 
-        # Check if we're in email collection mode
+            return await _deliver_collected_email(
+                email,
+                "Address submitted in chat with no accompanying message",
+                "direct email submission",
+            )
+
+        # An address inside a sentence only counts while the previous turns were
+        # asking for one, so a message that merely mentions an address is not
+        # mistaken for the visitor leaving theirs.
         in_email_collection = any(
             msg.is_email_collection and not msg.email_collected
             for msg in (chat_request.conversation_history or [])[-2:]
         )
 
         if in_email_collection:
-            # Extract email using regex
-            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-            email_match = re.search(email_pattern, chat_request.message)
-            
+            email_match = _EMAIL_IN_TEXT_RE.search(chat_request.message)
             if email_match:
                 try:
-                    email = email_match.group(0)
-                    valid = validate_email(email)
-                    email = valid.email
-                    
-                    message_content = chat_request.message.replace(email, '').strip()
-                    if not message_content:
-                        message_content = "Email provided during chat interaction"
-                    
-                    contact_request = ContactRequest(
-                        email=email,
-                        message=message_content
-                    )
-
-                    try:
-                        await contact(contact_request)
-                    except HTTPException:
-                        logger.exception("Contact delivery failed for chat-collected address")
-                        return {
-                            "response": EMAIL_SEND_FAILED_MESSAGE,
-                            "email_collected": False,
-                            "is_email_collection": False
-                        }
-
-                    logger.info("Email notification sent for chat-collected address")
-
-                    return {
-                        "response": EMAIL_RECEIVED_MESSAGE,
-                        "email_collected": True,
-                        "is_email_collection": False
-                    }
+                    email = validate_email(email_match.group(0)).email
                 except EmailNotValidError:
-                    return {
-                        "response": EMAIL_INVALID_MESSAGE,
-                        "email_collected": False,
-                        "is_email_collection": True
-                    }
+                    return _chat_reply(EMAIL_INVALID_MESSAGE, is_email_collection=True)
 
-        # Check if this is a new email collection request. Matching on intent
+                # Whatever they wrote around the address is the message itself.
+                message_content = chat_request.message.replace(email, '').strip()
+                if not message_content:
+                    message_content = "Email provided during chat interaction"
+
+                return await _deliver_collected_email(
+                    email, message_content, "chat-collected address"
+                )
+
+        # Asking for an address, rather than receiving one. Matching on intent
         # phrases rather than the bare words "contact"/"email"/"newsletter" is
         # what keeps a question *about* the work from being answered with a
         # request for the visitor's address - see CONTACT_INTENT_PHRASES.
@@ -425,13 +411,10 @@ async def chat_with_files(chat_request: ChatRequest, request: Request):
         )
 
         if should_collect_email:
-            return {
-                "response": EMAIL_REQUEST_MESSAGE,
-                "is_email_collection": True,
-                "email_collected": False
-            }
-        
-        # Normal chat flow - answer from the cached corpus (profile + projects).
+            return _chat_reply(EMAIL_REQUEST_MESSAGE, is_email_collection=True)
+
+        # Normal chat flow - answer from the cached corpus (profile, projects,
+        # writing).
         response = get_gemini_response(
             GEMINI_API_KEY,
             chat_request.message,
@@ -440,7 +423,7 @@ async def chat_with_files(chat_request: ChatRequest, request: Request):
         )
 
         return {"response": response}
-        
+
     except HTTPException:
         raise
     except Exception:
@@ -470,15 +453,14 @@ async def get_content(file_name: str):
         logger.exception("get_content failed for %r", file_name)
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
-@app.post("/api/contact")
-async def contact(request: ContactRequest, http_request: Request = None):
-    try:
-        # Only rate limited when reached over HTTP. chat_with_files calls this
-        # directly (http_request is None) and is already limited upstream, so
-        # the internal path must not consume a second slot.
-        if http_request is not None:
-            enforce_rate_limit(http_request, contact_limiter, "contact")
+async def _send_contact_email(email: str, message: str) -> None:
+    """Delivers a collected address to Yanir's inbox.
 
+    Raises HTTPException on a configuration or SMTP failure; callers decide how
+    that reads to the visitor. The chat flow answers with a message offering the
+    address directly, while the HTTP route surfaces the status.
+    """
+    try:
         # Email configuration
         sender_email = os.getenv("EMAIL_ADDRESS")
         sender_password = os.getenv("EMAIL_PASSWORD")
@@ -502,8 +484,8 @@ async def contact(request: ContactRequest, http_request: Request = None):
         body = f"""
         New contact request from your portfolio chat!
         
-        User Email: {request.email}
-        Message: {request.message}
+        User Email: {email}
+        Message: {message}
         Timestamp: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
         """
 
@@ -519,29 +501,27 @@ async def contact(request: ContactRequest, http_request: Request = None):
                 server.send_message(msg)
                 logger.info("Contact notification email sent")
         except Exception:
-            # The raw SMTP error used to be returned to the client, which could
-            # reflect the sender account and server details back to anyone who
-            # could make the send fail. Every other handler in this file reports
-            # INTERNAL_ERROR_DETAIL; this one was the exception.
+            # The raw SMTP error names the sender account and the server, so it
+            # stays server-side: returning it would reflect both back to anyone
+            # who can make a send fail.
             logger.exception("SMTP send failed")
             raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
-        return {"status": "success", "message": "Email sent successfully"}
     except HTTPException:
         raise
     except Exception:
-        logger.exception("Contact endpoint error")
+        logger.exception("Contact delivery error")
         raise HTTPException(status_code=500, detail=INTERNAL_ERROR_DETAIL)
 
-# `log_collected_email` was removed here. It appended every visitor's address to
-# `collected_emails.json` inside the container - a file that Cloud Run's
-# scale-to-zero deletes, so it was never readable and never a record of anything.
-# The trade it made was the worst available: personal data written to disk in
-# exchange for nothing, while the same address was already being delivered by
-# email, which is the actual record. The comment three functions above already
-# said an address has no reason to sit in log storage; this contradicted it.
 
-# Project endpoints
+@app.post("/api/contact")
+async def contact(request: ContactRequest, http_request: Request):
+    """Sends a contact message. Rate limited per client and globally."""
+    enforce_rate_limit(http_request, contact_limiter, "contact")
+    await _send_contact_email(request.email, request.message)
+    return {"status": "success", "message": "Email sent successfully"}
+
+
 @app.get("/api/writing")
 async def list_writing():
     """Published pieces, newest first.
@@ -578,12 +558,12 @@ async def get_projects(featured_only: bool = False):
             projects = get_featured_projects()
         else:
             projects = get_all_projects()
-        
+
         # Remove full content from listing to reduce payload size
         for project in projects:
             if 'content' in project:
                 del project['content']
-        
+
         return {"projects": projects}
     except Exception:
         logger.exception("Error fetching projects")
@@ -596,7 +576,7 @@ async def get_project(slug: str):
         project = get_project_by_slug(slug)
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
-        
+
         return {"project": project}
     except HTTPException:
         raise

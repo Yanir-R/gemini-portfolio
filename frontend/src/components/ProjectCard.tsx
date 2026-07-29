@@ -9,19 +9,15 @@ interface ProjectCardProps {
 }
 
 /*
- * Two things went beyond the palette here.
+ * The title is a real `Link` whose ::before covers the card, so the whole
+ * surface is clickable while the destination stays keyboard-reachable,
+ * middle-clickable and announced as a link - none of which a `div` with an
+ * `onClick` would be.
  *
- * The card was a `div` with an `onClick`, so it could not be reached by
- * keyboard, opened in a new tab, or announced as a link. The title is now a
- * real `Link` whose ::after covers the card, which keeps the whole surface
- * clickable while making it a link everywhere it matters.
- *
- * It also carried a hardcoded `highlightTechs` array - fourteen strings ranking
- * "Vertex AI" and "React 19" as more impressive than whatever else a project
- * used - and styled matches more prominently. That is an editorial judgement
- * frozen in a component, wrong the moment a project's emphasis changes, and
- * invisible to whoever writes the markdown. The write-up already lists its stack
- * in a deliberate order; the card now respects that order instead of overruling it.
+ * The chips are the write-up's own stack in the write-up's own order. Ranking
+ * them here would freeze an editorial judgement in a component, where it goes
+ * stale the moment a project's emphasis changes and is invisible to whoever
+ * edits the markdown.
  */
 const MAX_TECH_SHOWN = 5;
 
