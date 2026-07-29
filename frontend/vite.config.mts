@@ -243,7 +243,8 @@ const emitDiscoveryFiles = (siteUrl: string, backendUrl: string, avatarUrl: stri
             '',
             '- [GitHub](https://github.com/Yanir-R)',
             '- [LinkedIn](https://www.linkedin.com/in/yanirrot/)',
-            '- Email: rotyanir@gmail.com',
+            '',
+            'To make contact, use the assistant or the Email button on the site.',
             '',
         ].join('\n');
 

@@ -71,7 +71,16 @@
              whose identity is verifiable by following the link, which is what
              lets a search engine reconcile this page with the GitHub and
              LinkedIn accounts and treat them as one person - the entire
-             mechanism by which a search for a name reaches this site. -->
+             mechanism by which a search for a name reaches this site.
+
+             No `email` property, deliberately. schema.org allows one and it
+             would be trivial to add, but a structured-data block is the most
+             machine-readable place on the internet to publish an address: it
+             is parsed by everything, including the scrapers that exist purely
+             to harvest addresses. Someone who wants to make contact has the
+             assistant and the Email button, both of which reach the same
+             inbox, so the only thing an `email` here would add is the spam. -->
+
         <script type="application/ld+json">
             {
                 "@context": "https://schema.org",
@@ -83,7 +92,6 @@
                         "url": "%VITE_SITE_URL%/",
                         "image": "%VITE_SITE_URL%/og-image.png",
                         "jobTitle": "Full-Stack AI Engineer",
-                        "email": "mailto:rotyanir@gmail.com",
                         "description": "Full-stack engineer working on the half of AI engineering that starts after the demo works: multi-agent systems for production incident investigation, grounding and citation correctness, context compaction and token cost. Previously seven years of frontend and full-stack work, including a sports betting platform at 500K daily users and finance applications for Israeli enterprises.",
                         "knowsAbout": [
                             "Multi-agent AI systems",
