@@ -62,7 +62,7 @@ def test_second_request_answers_busy_without_calling_upstream(stub_gemini, stub_
     # This is what stops the starvation: while the chain is cooling, a request
     # costs no upstream call at all, so requests stop queueing behind refusals.
     assert len(models.tried) == calls_after_first
-    assert reply == BUSY_MESSAGE
+    assert reply.text == BUSY_MESSAGE
 
 
 def test_404_does_not_put_a_model_on_cooldown(stub_gemini, stub_knowledge):

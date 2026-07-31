@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from hmac import compare_digest
 from dotenv import load_dotenv
-from gemini_helper import get_gemini_response
+from gemini_helper import Answer, get_gemini_response
 from context import get_knowledge
+from selection import Selection, select
 from docs_helper import (
     read_markdown_file, PROFILE_DIR,
     get_all_projects, get_project_by_slug, get_featured_projects,
@@ -209,16 +210,71 @@ def _chat_reply(
     response: str,
     email_collected: bool = False,
     is_email_collection: bool = False,
+    trace: Optional[Dict[str, object]] = None,
 ) -> Dict[str, object]:
-    """One shape for every chat reply that is not a model answer.
+    """One shape for every chat reply.
 
     The two flags drive the frontend's collection state, so a reply that omits
     one leaves the client guessing at it.
+
+    `trace` is present only when a model produced the answer. The contact flow
+    replies here without calling Gemini at all, and a rail under those would be
+    describing a request that never happened.
     """
     return {
         "response": response,
         "email_collected": email_collected,
         "is_email_collection": is_email_collection,
+        "trace": trace,
+    }
+
+
+def _answer_trace(answer: Answer, selection: Selection) -> Optional[Dict[str, object]]:
+    """What the answer cost, for the rail the site draws beneath it.
+
+    Deliberately only what the system can back. The counts come from the SDK's
+    own usage metadata and the document figures from the selection, so every
+    number here is measured rather than derived.
+
+    What is *not* here is as considered as what is. There is no confidence
+    score, because nothing verifies an answer against the corpus - and a site
+    whose argument is that its AI can be caught out would be making exactly the
+    claim it warns about. Nor is there a claim about which document an answer
+    came *out of*: selection decides what the model was given, and no step
+    afterwards records which of those it leaned on. The distinction is the
+    difference between a receipt and a guess.
+
+    `outcome` travels with the counts because "these documents were chosen for
+    your question" and "nothing distinguished one document from another, so all
+    of them went" are different facts. Rendering both as a bare number would
+    collapse them into a claim of selectivity the second case cannot support.
+
+    `Knowledge.approx_tokens` is deliberately absent. It is a chars-over-four
+    estimate of the same quantity `prompt_tokens` reports exactly, and showing a
+    guess beside the measurement of the same thing only invites a reader to work
+    out which one to believe. It stays a server-side signal for deciding when
+    the corpus needs trimming.
+    """
+    if not answer.from_model:
+        return None
+
+    return {
+        "model": answer.model,
+        "prompt_tokens": answer.prompt_tokens,
+        "thinking_tokens": answer.thinking_tokens,
+        "output_tokens": answer.output_tokens,
+        "total_tokens": answer.total_tokens,
+        "finish_reason": answer.finish_reason,
+        "latency_ms": answer.latency_ms,
+        # Counts, not names. The kind of document is safe to state; which one an
+        # answer leaned on is not knowable here. Pluralisation is left to the
+        # frontend, which is where the site's copy lives.
+        "context": [
+            {"kind": kind, "count": count}
+            for kind, count in selection.knowledge.source_counts
+        ],
+        "context_outcome": selection.outcome,
+        "context_available": selection.available,
     }
 
 
@@ -415,14 +471,20 @@ async def chat_with_files(chat_request: ChatRequest, request: Request):
 
         # Normal chat flow - answer from the cached corpus (profile, projects,
         # writing).
-        response = get_gemini_response(
+        #
+        # Which documents this question needs, rather than all of them. The
+        # selection is held in a local so the trace describes the request that
+        # was actually made - calling select() again for the trace could
+        # describe a different one if the corpus rebuilt in between.
+        selection = select(chat_request.message, get_knowledge())
+        answer = get_gemini_response(
             GEMINI_API_KEY,
             chat_request.message,
-            get_knowledge(),
+            selection.knowledge,
             _to_model_turns(chat_request.conversation_history),
         )
 
-        return {"response": response}
+        return _chat_reply(answer.text, trace=_answer_trace(answer, selection))
 
     except HTTPException:
         raise

@@ -18,6 +18,7 @@ import context
 import gemini_helper
 import main
 import prompt
+import selection
 from gemini_helper import (
     BUSY_MESSAGE,
     MISCONFIGURED_MESSAGE,
@@ -120,7 +121,7 @@ def test_empty_corpus_is_refused_without_calling_the_model(monkeypatch):
 
     monkeypatch.setattr("gemini_helper.genai.Client", explode)
 
-    assert get_gemini_response("key", "who is he?", context.EMPTY) == NO_KNOWLEDGE_MESSAGE
+    assert get_gemini_response("key", "who is he?", context.EMPTY).text == NO_KNOWLEDGE_MESSAGE
 
 
 # --- what a visitor sees when the upstream API refuses ------------------------
@@ -133,7 +134,7 @@ def test_quota_exhaustion_advances_through_every_model(stub_gemini):
     answer = get_gemini_response("key", "hi", context.get_knowledge())
 
     assert models.tried == list(gemini_helper.MODELS)
-    assert answer == BUSY_MESSAGE
+    assert answer.text == BUSY_MESSAGE
 
 
 def test_quota_message_speaks_in_yanirs_voice_and_offers_the_email_route():
@@ -151,7 +152,7 @@ def test_auth_failure_is_not_reported_as_busy(stub_gemini):
 
     answer = get_gemini_response("key", "hi", context.get_knowledge())
 
-    assert answer == MISCONFIGURED_MESSAGE
+    assert answer.text == MISCONFIGURED_MESSAGE
     assert models.tried == [gemini_helper.MODELS[0]]
 
 
@@ -275,11 +276,7 @@ def test_partial_corpus_is_not_cached(monkeypatch, fresh_corpus_cache):
 
     def build_missing_one():
         full = real_build()
-        return context.Knowledge(
-            text=full.text,
-            sources=full.sources[:-1],
-            approx_tokens=full.approx_tokens,
-        )
+        return context.Knowledge(sections=full.sections[:-1])
 
     monkeypatch.setattr(context, "_build", build_missing_one)
 
@@ -290,7 +287,7 @@ def test_partial_corpus_is_not_cached(monkeypatch, fresh_corpus_cache):
 
 
 def _response_with_finish_reason(name):
-    """The minimum shape `_log_usage` inspects."""
+    """The minimum shape `_read_usage` inspects."""
     finish = type("FinishReason", (), {"name": name})()
     candidate = type("Candidate", (), {"finish_reason": finish})()
     return type("Response", (), {"candidates": [candidate], "usage_metadata": None})()
@@ -302,8 +299,140 @@ def test_truncated_response_is_reported():
     Truncation is invisible otherwise: the call succeeds and `response.text`
     reads like a normal reply right up to the point it stops mid-sentence.
     """
-    assert gemini_helper._log_usage("test", _response_with_finish_reason("MAX_TOKENS")) is True
-    assert gemini_helper._log_usage("test", _response_with_finish_reason("STOP")) is False
+    truncated = gemini_helper._read_usage("test", _response_with_finish_reason("MAX_TOKENS"))
+    complete = gemini_helper._read_usage("test", _response_with_finish_reason("STOP"))
+
+    assert truncated["finish_reason"] == "MAX_TOKENS"
+    assert complete["finish_reason"] == "STOP"
+
+
+def test_usage_absent_upstream_is_reported_as_absent_rather_than_zero():
+    """A count the API did not send must not become a number on the site.
+
+    The trace rail renders these as evidence under an answer, so a missing
+    figure has to stay missing. Filling it with 0 would be the site inventing a
+    measurement - the precise failure it exists to argue against.
+    """
+    usage = gemini_helper._read_usage("test", _response_with_finish_reason("STOP"))
+
+    for field in ("prompt_tokens", "thinking_tokens", "output_tokens", "total_tokens"):
+        assert usage[field] is None
+
+
+# --- the trace shown under an answer ------------------------------------------
+#
+# The site displays what an answer cost as evidence that it is grounded and
+# bounded. That only works while every figure is measured, so the property these
+# pin is not "the numbers are right" but "there are no numbers when nothing was
+# measured". A rail under a reply the model never produced would be the site
+# fabricating exactly the kind of claim it advertises catching.
+
+
+def _whole_corpus_selection():
+    knowledge = context.get_knowledge()
+    return selection.Selection(
+        knowledge=knowledge,
+        outcome=selection.UNFOCUSED,
+        available=len(knowledge.sections),
+    )
+
+
+def test_a_reply_the_model_never_produced_carries_no_trace():
+    """The contact flow, an empty corpus and a fully cooled-down chain all
+    answer without reaching Gemini. None of them has anything true to report."""
+    chosen = _whole_corpus_selection()
+
+    for message in (BUSY_MESSAGE, MISCONFIGURED_MESSAGE, NO_KNOWLEDGE_MESSAGE):
+        assert main._answer_trace(gemini_helper.Answer(text=message), chosen) is None
+
+
+def test_an_empty_corpus_answers_without_a_model_attributed(monkeypatch):
+    def explode(*args, **kwargs):
+        raise AssertionError("the model must not be called without a corpus")
+
+    monkeypatch.setattr("gemini_helper.genai.Client", explode)
+
+    answer = get_gemini_response("key", "who is he?", context.EMPTY)
+
+    assert answer.from_model is False
+    assert answer.model is None
+
+
+def test_an_exhausted_chain_answers_busy_with_no_usage_attached(stub_gemini):
+    """Three 429s produce the busy message, and no counts: nothing succeeded."""
+    stub_gemini(ApiError(429), ApiError(429), ApiError(429))
+
+    answer = get_gemini_response("key", "hi", context.get_knowledge())
+
+    assert answer.text == BUSY_MESSAGE
+    assert answer.from_model is False
+    assert answer.total_tokens is None
+    assert answer.latency_ms is None
+
+
+def test_a_model_answer_reports_the_corpus_it_was_given():
+    """`context` describes what was put in front of the model.
+
+    Not what the answer used - the whole corpus is sent on every request and
+    nothing attributes a sentence to a section, so this is the honest figure and
+    a per-answer source list would not be.
+    """
+    chosen = _whole_corpus_selection()
+    answer = gemini_helper.Answer(
+        text="an answer",
+        model="gemini-flash-latest",
+        prompt_tokens=8_000,
+        output_tokens=90,
+        latency_ms=3_200,
+        finish_reason="STOP",
+    )
+
+    trace = main._answer_trace(answer, chosen)
+
+    assert trace["model"] == "gemini-flash-latest"
+    # Every document is accounted for under some kind, so the breakdown a
+    # visitor reads adds up to what was sent rather than to a subset of it.
+    assert sum(entry["count"] for entry in trace["context"]) == len(
+        chosen.knowledge.sections
+    )
+    # Not reported upstream in this response, so absent here rather than zero.
+    assert trace["thinking_tokens"] is None
+
+
+def test_the_corpus_estimate_is_never_shown_beside_the_measured_count():
+    """`approx_tokens` is a chars-over-four guess at what `prompt_tokens`
+    measures exactly. Publishing both invites a reader to pick one."""
+    chosen = _whole_corpus_selection()
+    answer = gemini_helper.Answer(text="an answer", model="gemini-flash-latest")
+
+    trace = main._answer_trace(answer, chosen)
+
+    assert "context_tokens" not in trace
+    assert chosen.knowledge.approx_tokens not in trace.values()
+
+
+def test_source_counts_name_every_document_kind_without_zeroes():
+    knowledge = context.get_knowledge()
+
+    counts = dict(knowledge.source_counts)
+
+    assert counts["note"] == sum(s.startswith("Profile / ") for s in knowledge.sources)
+    assert all(count > 0 for count in counts.values()), "a kind with nothing in it is omitted"
+    assert sum(counts.values()) == len(knowledge.sources)
+
+
+def test_an_unrecognised_label_is_still_counted():
+    """A new content directory must not vanish from the total a visitor reads."""
+    knowledge = context.Knowledge(
+        sections=(
+            context.Section(label="Profile / about-me", body="body"),
+            context.Section(label="Talks / some conference", body="body"),
+        )
+    )
+
+    counts = dict(knowledge.source_counts)
+
+    assert counts == {"note": 1, context.UNKNOWN_KIND: 1}
 
 
 def test_technical_questions_do_not_trigger_contact_flow():
