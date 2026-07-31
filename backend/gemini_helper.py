@@ -10,6 +10,7 @@ chain that treats only 503 as retryable never falls back at all, because a
 retired model answers 404.
 """
 
+from dataclasses import dataclass
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
@@ -144,22 +145,55 @@ EMPTY_RESPONSE_MESSAGE = (
 )
 
 
+@dataclass(frozen=True)
+class Answer:
+    """The reply, and what producing it actually cost.
+
+    Everything past `text` is optional because not every reply comes from a
+    model. A refusal to answer without a corpus, or a busy message returned
+    while every model is still cooling down, never reaches the API at all -
+    those arrive with `model` unset and no counts behind them.
+
+    That distinction is the point. The site's argument is that it does not
+    overstate, so a reply the model never produced must not be able to display
+    numbers describing how it was produced. Nothing here is derived, rounded up
+    or filled in: a figure the API did not report stays `None` rather than
+    becoming a plausible zero.
+    """
+
+    text: str
+    model: Optional[str] = None
+    prompt_tokens: Optional[int] = None
+    thinking_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
+    total_tokens: Optional[int] = None
+    finish_reason: Optional[str] = None
+    latency_ms: Optional[int] = None
+
+    @property
+    def from_model(self) -> bool:
+        """Whether an upstream call produced this reply."""
+        return self.model is not None
+
+
 def get_gemini_response(
     api_key: str,
     user_question: str,
     knowledge: Knowledge,
     conversation_history: Optional[Iterable[Dict[str, str]]] = None,
-) -> str:
+) -> Answer:
     """Answers a visitor's question in Yanir's voice, grounded in `knowledge`.
 
-    Returns user-facing text in every case, including failure - callers render
-    the string as the assistant's reply rather than distinguishing error paths.
+    Returns an `Answer` in every case, including failure: `.text` is always
+    user-facing copy, so callers render it as the assistant's reply rather than
+    distinguishing error paths. The metadata is what separates them - a failure
+    carries no model and no counts.
     """
     if knowledge.is_empty:
         # Nothing to ground an answer in. Calling the model here would produce
         # confident invention about a real person, which is worse than an outage.
         logger.error("Refusing to answer: knowledge corpus is empty")
-        return NO_KNOWLEDGE_MESSAGE
+        return Answer(text=NO_KNOWLEDGE_MESSAGE)
 
     # The per-call timeout is what keeps a hung upstream call from holding a
     # worker. Cloud Run runs at most four instances, each a single uvicorn
@@ -202,17 +236,27 @@ def get_gemini_response(
             continue
 
         skipped_all = False
+        call_started = time.monotonic()
         try:
             response = client.models.generate_content(
                 model=model_id,
                 contents=contents,
                 config=config,
             )
-            truncated = _log_usage(model_id, response)
+            # Measured around the call itself rather than the whole function, so
+            # it reports what the model took and not how long a cooling-down
+            # model was skipped for.
+            latency_ms = int((time.monotonic() - call_started) * 1000)
+            usage = _read_usage(model_id, response)
 
             text = (response.text or "").strip()
             if not text:
-                return EMPTY_RESPONSE_MESSAGE
+                return Answer(
+                    text=EMPTY_RESPONSE_MESSAGE,
+                    model=model_id,
+                    latency_ms=latency_ms,
+                    **usage,
+                )
 
             # A MAX_TOKENS finish means the visitor is looking at half a
             # sentence. The call succeeded and `response.text` is a plausible
@@ -224,10 +268,20 @@ def get_gemini_response(
             # token ceiling means something already went wrong - usually
             # thinking tokens consuming the shared budget. Saying so is more use
             # than a fragment.
-            if truncated:
-                return TRUNCATED_RESPONSE_MESSAGE
+            if usage["finish_reason"] == "MAX_TOKENS":
+                return Answer(
+                    text=TRUNCATED_RESPONSE_MESSAGE,
+                    model=model_id,
+                    latency_ms=latency_ms,
+                    **usage,
+                )
 
-            return text
+            return Answer(
+                text=text,
+                model=model_id,
+                latency_ms=latency_ms,
+                **usage,
+            )
 
         except Exception as e:
             last_error = e
@@ -251,7 +305,11 @@ def get_gemini_response(
 
             # Anything else (auth, malformed request, network) is not a
             # model-availability problem, so trying another model won't help.
-            return _failure_message(e)
+            #
+            # No usage travels with this: the call raised, so there are no
+            # counts to report and inventing any would describe work that never
+            # happened.
+            return Answer(text=_failure_message(e))
 
     if skipped_all:
         # Every model was still cooling down, so nothing was even attempted.
@@ -259,45 +317,65 @@ def get_gemini_response(
         # point of the cooldown - the visitor gets an honest answer in
         # milliseconds instead of waiting out three refusals.
         logger.warning("All models cooling down; answering busy without calling upstream")
-        return BUSY_MESSAGE
+        return Answer(text=BUSY_MESSAGE)
 
     # Every candidate model failed; report the category of the last failure.
-    return _failure_message(last_error)
+    return Answer(text=_failure_message(last_error))
 
 
-def _log_usage(model_id: str, response) -> bool:
-    """Records what the request actually cost, and whether it was cut short.
+def _read_usage(model_id: str, response) -> Dict[str, Optional[object]]:
+    """Reads what the request cost, logs it, and hands it back to the caller.
 
-    The token counts are what makes "does the corpus need trimming?" answerable
-    with a number rather than a guess.
+    These numbers were computed and dropped for a year: logged to Cloud Run
+    where nobody reads them, then discarded at the return boundary because the
+    function answered with a bare string. Returning them is the whole of what
+    the trace rail needed - no new measurement, only stopping the old one from
+    being thrown away.
 
-    The truncation warning exists because truncation is otherwise invisible: the
+    Every field is read straight off the SDK response, so a count the API did
+    not report comes back `None`. That matters more here than the tidiness of a
+    zero: the numbers are shown to visitors as evidence, and a fabricated one
+    would be the exact overstatement this site exists to argue against.
+
+    The truncation warning stays because truncation is otherwise invisible: the
     call succeeds, `response.text` is a plausible string, and only
     `finish_reason` says the visitor got half a sentence.
     """
     usage = getattr(response, "usage_metadata", None)
+    fields: Dict[str, Optional[object]] = {
+        "prompt_tokens": getattr(usage, "prompt_token_count", None),
+        "thinking_tokens": getattr(usage, "thoughts_token_count", None),
+        "output_tokens": getattr(usage, "candidates_token_count", None),
+        "total_tokens": getattr(usage, "total_token_count", None),
+    }
+
     if usage is not None:
         logger.info(
             "Gemini usage model=%s prompt=%s thinking=%s output=%s total=%s",
             model_id,
-            getattr(usage, "prompt_token_count", None),
-            getattr(usage, "thoughts_token_count", None),
-            getattr(usage, "candidates_token_count", None),
-            getattr(usage, "total_token_count", None),
+            fields["prompt_tokens"],
+            fields["thinking_tokens"],
+            fields["output_tokens"],
+            fields["total_tokens"],
         )
 
     candidates = getattr(response, "candidates", None) or []
     finish_reason = getattr(candidates[0], "finish_reason", None) if candidates else None
-    if finish_reason is not None and getattr(finish_reason, "name", "") == "MAX_TOKENS":
+    # The enum's name, not the enum: this crosses a JSON boundary on its way to
+    # the browser, and `str(enum)` renders as "FinishReason.STOP" rather than
+    # something a rail can print.
+    name = getattr(finish_reason, "name", "") if finish_reason is not None else ""
+    fields["finish_reason"] = name or None
+
+    if name == "MAX_TOKENS":
         logger.warning(
             "Model %s hit MAX_TOKENS - the answer was truncated mid-sentence. "
             "Thinking tokens share MAX_OUTPUT_TOKENS (%d); raise it.",
             model_id,
             MAX_OUTPUT_TOKENS,
         )
-        return True
 
-    return False
+    return fields
 
 
 def _failure_message(error: Optional[Exception]) -> str:

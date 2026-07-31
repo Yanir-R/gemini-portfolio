@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from docs_helper import (
     PROFILE_DIR,
@@ -50,20 +50,107 @@ CHARS_PER_TOKEN = 4
 CONTEXT_REVIEW_TOKENS = 20_000
 
 
+# The label prefixes `_build` writes, paired with the word the site uses for
+# that kind of document when it tells a visitor what an answer was grounded in.
+#
+# This lives here because this module owns the label format. A counter written
+# anywhere else would keep returning a confident number on the day a prefix
+# changes, and quietly count nothing.
+SECTION_KINDS = (
+    ("Profile / ", "note"),
+    ("Project / ", "project write-up"),
+    ("Writing / ", "post"),
+)
+
+# Anything whose label matches no known prefix. A new content directory should
+# still be counted rather than silently dropped from the total a visitor reads.
+UNKNOWN_KIND = "document"
+
+
+def kind_of(label: str) -> str:
+    """The visitor-facing word for the kind of document a label names."""
+    return next(
+        (word for prefix, word in SECTION_KINDS if label.startswith(prefix)),
+        UNKNOWN_KIND,
+    )
+
+
+@dataclass(frozen=True)
+class Section:
+    """One document in the corpus, kept whole.
+
+    The corpus used to exist only as one joined string, which was enough while
+    every request got all of it. Selecting documents per question needs them
+    addressable individually, so the join moved from build time to `Knowledge.text`
+    and this is what it joins.
+    """
+
+    label: str
+    body: str
+
+    @property
+    def kind(self) -> str:
+        return kind_of(self.label)
+
+    @property
+    def is_profile(self) -> bool:
+        """Yanir's own documents, as opposed to published projects and writing.
+
+        Load-bearing for selection: these are never filtered out. A corpus with
+        no profile already fails closed in `_build` for the same reason, and
+        narrowing must not reintroduce that hole from the other direction.
+        """
+        return self.label.startswith("Profile / ")
+
+
 @dataclass(frozen=True)
 class Knowledge:
     """The corpus, plus enough metadata to reason about its cost."""
 
-    text: str
-    sources: Tuple[str, ...]
-    approx_tokens: int
+    sections: Tuple[Section, ...]
+
+    @property
+    def text(self) -> str:
+        """The corpus as the model sees it.
+
+        Each section is fenced and labelled so the model can attribute a fact to
+        a source, and so injected text inside a document cannot pass itself off
+        as the end of the corpus. prompt.py wraps the whole block again.
+        """
+        return "\n\n".join(f"### {s.label}\n{s.body}" for s in self.sections)
+
+    @property
+    def sources(self) -> Tuple[str, ...]:
+        return tuple(s.label for s in self.sections)
+
+    @property
+    def approx_tokens(self) -> int:
+        return len(self.text) // CHARS_PER_TOKEN
 
     @property
     def is_empty(self) -> bool:
-        return not self.text.strip()
+        return not any(s.body.strip() for s in self.sections)
+
+    @property
+    def source_counts(self) -> Tuple[Tuple[str, int], ...]:
+        """How many documents of each kind are here, as (kind, count).
+
+        This describes what was put in front of the model for a request - not
+        which documents an answer drew on. Nothing tracks that: no attribution
+        step exists, so a per-answer source list would describe machinery this
+        project does not have.
+
+        Kinds with no documents are omitted rather than reported as zero.
+        """
+        counts: Dict[str, int] = {}
+        for section in self.sections:
+            counts[section.kind] = counts.get(section.kind, 0) + 1
+
+        ordered = [word for _, word in SECTION_KINDS] + [UNKNOWN_KIND]
+        return tuple((kind, counts[kind]) for kind in ordered if kind in counts)
 
 
-EMPTY = Knowledge(text="", sources=(), approx_tokens=0)
+EMPTY = Knowledge(sections=())
 
 _CONTENT_DIRS = (PROFILE_DIR, PROJECTS_DIR, WRITING_DIR)
 _READABLE_SUFFIXES = (".md", ".pdf")
@@ -169,16 +256,8 @@ def _build() -> Knowledge:
         )
         return EMPTY
 
-    # Each section is fenced and labelled so the model can attribute a fact to a
-    # source, and so injected text inside a document cannot pass itself off as
-    # the end of the corpus. prompt.py wraps the whole block again.
-    body = "\n\n".join(
-        f"### {label}\n{content}" for label, content in sections
-    )
     return Knowledge(
-        text=body,
-        sources=tuple(label for label, _ in sections),
-        approx_tokens=len(body) // CHARS_PER_TOKEN,
+        sections=tuple(Section(label=label, body=content) for label, content in sections)
     )
 
 

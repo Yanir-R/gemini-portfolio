@@ -159,6 +159,11 @@ export const useChat = () => {
                             content: result.response || '',
                             is_email_collection: result.is_email_collection,
                             email_collected: result.email_collected,
+                            // Carried on the message rather than held as
+                            // separate state: the trace belongs to one answer,
+                            // and a transcript of several answers needs each to
+                            // keep its own.
+                            trace: result.trace,
                         },
                     ]);
 
