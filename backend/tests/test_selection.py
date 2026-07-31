@@ -161,20 +161,84 @@ def test_a_term_appearing_in_every_document_selects_nothing():
     assert chosen.outcome == selection.UNFOCUSED
 
 
-def test_the_writing_questions_the_eval_covers_still_reach_their_post():
-    """Two golden cases depend on the chat answering from published writing.
-    Selection is the mechanism most likely to break them, and it would break
-    them silently - the answer becomes a plausible decline."""
+# A question, and the document that must survive selection for it to be
+# answerable. This is the guard the golden question set cannot be: a routing
+# miss makes the chat decline something that *is* written down, which reads
+# exactly like an honest decline, so every eval case still passes while the
+# site quietly gets worse. Run against the real corpus and costing no quota,
+# this is the cheapest place to catch it.
+#
+# Add a row whenever a document is added. A document nothing routes to is a
+# document the chat can only reach by accident.
+ROUTING = (
+    ("How does this portfolio site work?", "AI Chat Portfolio"),
+    ("What is ReelSensei?", "ReelSensei"),
+    ("What did you write about the advisor tool?", "advisor"),
+    ("What are the three meanings of nothing?", "Three Meanings"),
+    ("Why did an agent return nothing found?", "Nothing found"),
+    ("Tell me about agent tool calls that return nothing", "Nothing found"),
+    ("Tell me about crashing the Claude CLI", "crashed Claude"),
+    ("What do you know about Bun?", "crashed Claude"),
+    ("What happened with 22.7 million tokens?", "22.7 million"),
+    ("How do you handle token burn?", "22.7 million"),
+    ("Explain callbacks and promises", "callbacks"),
+    ("What is your experience with promises?", "callbacks"),
+    ("What did you build at Moonsite?", "resume"),
+    ("What's your preferred tech stack?", "resume"),
+)
+
+
+@pytest.mark.parametrize("question,expected", ROUTING)
+def test_a_question_reaches_the_document_that_answers_it(question, expected):
+    chosen = selection.select(question, context.get_knowledge())
+
+    reached = [s for s in chosen.knowledge.sources if expected.lower() in s.lower()]
+
+    assert reached, (
+        f"{question!r} no longer reaches {expected!r}. The chat will decline a "
+        f"question the corpus can answer, which reads as an honest decline."
+    )
+
+
+def test_every_document_is_reachable_by_some_question():
+    """A document nothing routes to is one the chat reaches only by accident."""
+    knowledge = context.get_knowledge()
+    reachable = set()
+    for question, _ in ROUTING:
+        reachable.update(selection.select(question, knowledge).knowledge.sources)
+
+    unreachable = [
+        label
+        for label in knowledge.sources
+        if label not in reachable and not label.startswith("Profile / ")
+    ]
+
+    assert not unreachable, f"no question in ROUTING reaches: {unreachable}"
+
+
+def test_a_word_and_its_inflections_reach_the_same_document():
+    """Exact matching missed a post titled "$340 burned" for a question about
+    token burn, and scored the question's most distinctive word against the
+    wrong document. Plurals fail the same way whenever somebody types one."""
+    assert selection._stem("burned") == selection._stem("burn")
+    assert selection._stem("tokens") == selection._stem("token")
+    assert selection._stem("meanings") == selection._stem("meaning") == selection._stem("mean")
+    # Short words are left alone: reducing "uses" to "us" costs more than the
+    # match is worth.
+    assert selection._stem("uses") == "uses"
+
+
+def test_a_dominant_match_does_not_suppress_a_relevant_one():
+    """The threshold is a share of the question, not of the winning document.
+    Measured against the winner, a document matching every term raises the bar
+    for everything else - which excluded a post whose title *was* the query."""
     knowledge = context.get_knowledge()
 
-    for question, expected in (
-        ("What have you written about agent tool calls returning nothing?", "Nothing"),
-        ("What did you say about Cursor's token usage?", "token"),
-    ):
-        chosen = selection.select(question, knowledge)
-        reached = [s for s in chosen.knowledge.sources if expected.lower() in s.lower()]
+    chosen = selection.select("Why did an agent return nothing found?", knowledge)
 
-        assert reached, f"{question!r} no longer reaches a post matching {expected!r}"
+    labels = " | ".join(chosen.knowledge.sources)
+    assert "Nothing found" in labels
+    assert "Three Meanings" in labels, "the strongest match must survive too"
 
 
 # --- the result is typed, not a bare corpus ------------------------------------
