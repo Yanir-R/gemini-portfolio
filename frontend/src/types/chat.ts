@@ -50,11 +50,12 @@ export interface AnswerTrace {
     context?: ContextCount[] | null;
     /*
      * How that set was arrived at. 'narrowed' means the question selected these
-     * documents; 'unfocused' means nothing distinguished one document from
-     * another, so all of them went. Rendering both as a plain count would claim
-     * a selectivity the second case does not have.
+     * documents; 'conversational' means nothing was being asked, so only his
+     * notes went; 'unfocused' means nothing distinguished one document from
+     * another, so all of them did. Rendering the last as a plain count would
+     * claim a selectivity it does not have, so it reads differently.
      */
-    context_outcome?: 'narrowed' | 'unfocused' | 'no_corpus' | null;
+    context_outcome?: 'narrowed' | 'conversational' | 'unfocused' | 'no_corpus' | null;
     /** The whole corpus, so a narrowed set can be reported as a share of it. */
     context_available?: number | null;
 }

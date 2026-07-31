@@ -82,15 +82,68 @@ def test_profile_documents_are_never_dropped():
         assert len(kept) == 2, f"profile dropped for {question!r}"
 
 
-def test_a_question_with_no_distinguishing_terms_sends_everything():
-    """A greeting or a bare follow-up gives nothing to select on. There is no
-    basis to exclude a document, so none is excluded - the failure that matters
-    is omitting the one that held the answer."""
-    for question in ("hi there", "and what about the second one?", "tell me more"):
-        chosen = selection.select(question, _corpus(*SAMPLE))
+def test_a_subject_the_corpus_has_no_vocabulary_for_sends_everything():
+    """No document is distinguished, so none is excluded - the failure that
+    matters is omitting the one that held the answer."""
+    chosen = selection.select("quantum chromodynamics", _corpus(*SAMPLE))
 
-        assert chosen.outcome == selection.UNFOCUSED
-        assert len(chosen.knowledge.sections) == len(SAMPLE)
+    assert chosen.outcome == selection.UNFOCUSED
+    assert len(chosen.knowledge.sections) == len(SAMPLE)
+
+
+# --- a greeting is not a question ----------------------------------------------
+
+
+def test_a_greeting_does_not_load_the_whole_corpus():
+    """Ten documents to answer "hi" is the most expensive reply on the site for
+    the exchange that needs it least. Nothing is being asked, so nothing beyond
+    his own notes is fetched."""
+    for greeting in ("hi", "hello there", "hey!", "thanks"):
+        chosen = selection.select(greeting, _corpus(*SAMPLE))
+
+        assert chosen.outcome == selection.CONVERSATIONAL, greeting
+        assert all(s.is_profile for s in chosen.knowledge.sections), greeting
+
+
+def test_a_greeting_still_gets_a_corpus_to_answer_from():
+    """get_gemini_response refuses to answer without one, so an empty selection
+    would greet a visitor with "I can't reach my notes"."""
+    chosen = selection.select("hi", _corpus(*SAMPLE))
+
+    assert not chosen.knowledge.is_empty
+
+
+def test_a_follow_up_is_framed_by_what_was_being_discussed():
+    """"And what about the second one?" is a real question whose subject lives
+    in the previous turns rather than in this message. Reading it as a greeting
+    would strip away exactly the documents it needs."""
+    chosen = selection.select(
+        "and what about the second one?",
+        _corpus(*SAMPLE),
+        history=["What did you say about Cursor tokens?", "Cursor burned 22.7 million."],
+    )
+
+    assert chosen.outcome == selection.NARROWED
+    assert "Writing / Cursor tokens" in chosen.knowledge.sources
+
+
+def test_a_follow_up_with_no_conversation_behind_it_is_not_treated_as_one():
+    """There is nothing to follow up on, so it falls back to the cheap path
+    rather than inventing a subject for it."""
+    chosen = selection.select("and what about the second one?", _corpus(*SAMPLE))
+
+    assert chosen.outcome == selection.CONVERSATIONAL
+
+
+def test_framing_reads_only_the_turns_the_model_is_replayed():
+    """The search must not reach for a subject the model itself cannot see, or
+    it would select documents to answer a question the model has forgotten."""
+    stale = ["Tell me about ReelSensei"]
+    recent = ["What did you say about Cursor tokens?"] * selection.FRAMING_TURNS
+
+    chosen = selection.select("and the other one?", _corpus(*SAMPLE), history=stale + recent)
+
+    assert "Project / ReelSensei" not in chosen.knowledge.sources
 
 
 def test_a_term_appearing_in_every_document_selects_nothing():

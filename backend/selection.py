@@ -44,7 +44,7 @@ import logging
 import math
 import re
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, Set, Tuple
+from typing import Dict, FrozenSet, Iterable, Set, Tuple
 
 from context import Knowledge, Section
 
@@ -76,6 +76,11 @@ MIN_TERM_LENGTH = 3
 # proper noun from a common word that happens to be rare here. Across ten
 # documents that is a real limit of the measure, and the answer is to keep
 # grammar out of the scoring rather than to tune the threshold around it.
+#
+# Greetings belong here for the plainest reason available: they carry no topic,
+# which is the whole definition of the list. Without them "hello there" produced
+# a term that matched no document, which reads as an unknown subject and sends
+# the entire corpus - ten documents fetched to say hello back.
 _STOPWORDS: FrozenSet[str] = frozenset(
     """
     the and for you your yours are was were what when where which who whom why how
@@ -91,6 +96,9 @@ _STOPWORDS: FrozenSet[str] = frozenset(
 
     one two three four five six seven eight nine ten
     first second third fourth fifth last next previous former latter
+
+    hi hey hello hiya howdy greetings morning afternoon evening
+    thanks thank cheers please sorry welcome bye goodbye ok okay sure
     """.split()
 )
 
@@ -160,12 +168,19 @@ def _index_for(knowledge: Knowledge) -> _Index:
     return index
 
 
-# What the selection concluded. Three states rather than a bare corpus, because
-# "we chose these" and "we could not tell, so we sent everything" are different
-# facts about an answer, and the site reports them differently.
+# What the selection concluded. States rather than a bare corpus, because "we
+# chose these", "there was nothing to answer from a document" and "we could not
+# tell, so we sent everything" are different facts about an answer, and the site
+# reports them differently.
 NARROWED = "narrowed"
 UNFOCUSED = "unfocused"
+CONVERSATIONAL = "conversational"
 NO_CORPUS = "no_corpus"
+
+# How many recent turns are read when the message itself says nothing topical.
+# Matches the history the model is replayed, so what frames the search is what
+# the model can actually see.
+FRAMING_TURNS = 6
 
 
 @dataclass(frozen=True)
@@ -181,7 +196,30 @@ class Selection:
         return self.outcome == NARROWED
 
 
-def select(question: str, knowledge: Knowledge) -> Selection:
+def _profile_only(knowledge: Knowledge, available: int) -> Selection:
+    """The least a reply can be built on without the corpus failing closed.
+
+    Not an empty corpus: `get_gemini_response` refuses to answer at all without
+    one, and greeting a visitor with "I can't reach my notes" would turn the
+    cheapest exchange on the site into its most alarming.
+    """
+    profile = tuple(section for section in knowledge.sections if section.is_profile)
+    if not profile:
+        return Selection(knowledge=knowledge, outcome=UNFOCUSED, available=available)
+
+    logger.info("Selection: conversational, sending %d profile documents", len(profile))
+    return Selection(
+        knowledge=Knowledge(sections=profile),
+        outcome=CONVERSATIONAL,
+        available=available,
+    )
+
+
+def select(
+    question: str,
+    knowledge: Knowledge,
+    history: Iterable[str] | None = None,
+) -> Selection:
     """Picks the documents worth sending for `question`.
 
     Yanir's own notes are always included. The chat answers in his first person
@@ -196,16 +234,31 @@ def select(question: str, knowledge: Knowledge) -> Selection:
     index = _index_for(knowledge)
     asked = _terms(question)
 
+    # Nothing topical in the message itself. Two different situations look
+    # identical here and need opposite handling, and what separates them is
+    # whether there is a conversation to be continuing.
+    #
+    # "And what about the second one?" is a real question whose subject is in
+    # the previous turns rather than in this message, so the recent turns are
+    # what the search gets framed with - the same turns the model is replayed,
+    # so the framing cannot reach for something the model cannot see.
+    #
+    # "Hi" is not a question at all. Sending ten documents to answer a greeting
+    # is the most expensive reply on the site for the exchange that needs it
+    # least.
+    if not asked:
+        asked = _terms("\n".join(list(history or [])[-FRAMING_TURNS:]))
+        if not asked:
+            return _profile_only(knowledge, available)
+
     scores: Dict[str, float] = {}
     for label, terms in index.terms:
         scores[label] = sum(index.weights.get(term, 0.0) for term in asked & terms)
 
     best = max(scores.values(), default=0.0)
 
-    # Nothing the visitor asked distinguishes one document from another: a
-    # greeting, a follow-up like "and the second one?", or a subject this corpus
-    # simply has no vocabulary for. There is no basis on which to exclude
-    # anything, so nothing is excluded.
+    # A subject this corpus has no distinctive vocabulary for. There is no basis
+    # on which to exclude anything, so nothing is excluded.
     if best <= 0:
         logger.info("Selection: no distinguishing terms, sending all %d documents", available)
         return Selection(knowledge=knowledge, outcome=UNFOCUSED, available=available)

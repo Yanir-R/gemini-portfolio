@@ -476,12 +476,17 @@ async def chat_with_files(chat_request: ChatRequest, request: Request):
         # selection is held in a local so the trace describes the request that
         # was actually made - calling select() again for the trace could
         # describe a different one if the corpus rebuilt in between.
-        selection = select(chat_request.message, get_knowledge())
+        turns = _to_model_turns(chat_request.conversation_history)
+        selection = select(
+            chat_request.message,
+            get_knowledge(),
+            history=[turn["content"] for turn in turns],
+        )
         answer = get_gemini_response(
             GEMINI_API_KEY,
             chat_request.message,
             selection.knowledge,
-            _to_model_turns(chat_request.conversation_history),
+            turns,
         )
 
         return _chat_reply(answer.text, trace=_answer_trace(answer, selection))
