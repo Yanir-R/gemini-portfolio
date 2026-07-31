@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageAvatar } from '@/components/MessageAvatar';
+import { TraceRail } from '@/components/TraceRail';
 import { useChat } from '@/hooks/useChat';
 import { QuickMessages } from '@/components/QuickMessages';
 import { QuickMessageOption } from '@/types/chat';
@@ -207,6 +208,11 @@ const Chat: React.FC = () => {
                             >
                                 {msg.content}
                             </p>
+                            {/* Only under an answer a model actually produced.
+                                The backend sends no trace for the contact flow
+                                or for a failure reply, so nothing here has to
+                                decide which replies deserve one. */}
+                            {msg.trace && <TraceRail trace={msg.trace} />}
                         </div>
                     </div>
                 ))}

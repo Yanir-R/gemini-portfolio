@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { apiClient } from '@/api/client';
 import { API_ENDPOINTS } from '@/api/endpoints';
-import { ChatMessage } from '@/types/chat';
+import { AnswerTrace, ChatMessage } from '@/types/chat';
 
 /**
  * Kept well below the backend's MAX_HISTORY_MESSAGES (40), which rejects a
@@ -16,6 +16,7 @@ interface ChatResponse {
     response: string;
     is_email_collection?: boolean;
     email_collected?: boolean;
+    trace?: AnswerTrace | null;
 }
 
 export const chatService = {
@@ -48,6 +49,10 @@ export const chatService = {
                 response: response.data.response,
                 is_email_collection: response.data.is_email_collection || false,
                 email_collected: response.data.email_collected || false,
+                // Left null rather than defaulted: an older backend that does
+                // not send this, or a reply produced without a model call, must
+                // render no rail rather than an empty one.
+                trace: response.data.trace ?? null,
             };
         } catch (error) {
             let errorMessage = 'Failed to get response from server';
