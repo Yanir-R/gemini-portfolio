@@ -50,10 +50,16 @@ from context import Knowledge, Section
 
 logger = logging.getLogger(__name__)
 
-# A selected set has to clear this share of the best-scoring document. A single
-# rare word shared with an otherwise unrelated post should not drag it in, and a
-# document scoring close to the best is plausibly about the same thing.
-SELECTION_RATIO = 0.5
+# How much of the question a document has to account for to be worth sending.
+#
+# Measured against the question, not against the winning document. Measuring
+# against the winner means a document that happens to match everything raises
+# the bar for every other one, and that suppressed a real answer: asked "why did
+# an agent return nothing found?", the post titled "Nothing found." scored 2.3
+# while a post matching all four terms scored 6.2, putting the threshold at 3.1
+# and excluding the document the question named. A share of the question does
+# not move when some other document does well.
+QUERY_COVERAGE = 0.25
 
 # Words shorter than this are dropped before scoring. Deliberately linguistic
 # rather than domain-specific: "AI", "Go" and "k8s" are real terms, but so are
@@ -104,16 +110,49 @@ _STOPWORDS: FrozenSet[str] = frozenset(
 
 _TERM_RE = re.compile(r"[a-z0-9][a-z0-9+.#-]*")
 
+# Shortest stem worth reducing to. Below this, stripping an ending does more
+# damage than the match is worth ("uses" would become "us").
+MIN_STEM_LENGTH = 4
+
+
+def _stem(token: str) -> str:
+    """Reduces a word to a form its other inflections also reduce to.
+
+    Exact matching missed the obvious: a post titled "$340 burned" did not match
+    a question about token burn, and the most distinctive word in the question
+    was scored against the wrong document as a result. Plurals fail the same way
+    every time somebody types the singular.
+
+    Correct linguistics is not the goal - agreement is. "Nothing" reducing to
+    "noth" is fine, because every occurrence in every document reduces to it
+    too. Plural is stripped before the verb endings so that "meanings",
+    "meaning" and "mean" all arrive at the same place; doing it the other way
+    round leaves the plural one suffix behind the singular.
+    """
+    for suffix, replacement in (("ies", "y"), ("es", ""), ("s", "")):
+        if token.endswith(suffix) and len(token) - len(suffix) + len(replacement) >= MIN_STEM_LENGTH:
+            token = token[: -len(suffix)] + replacement
+            break
+
+    for suffix in ("ing", "ed"):
+        if token.endswith(suffix) and len(token) - len(suffix) >= MIN_STEM_LENGTH:
+            return token[: -len(suffix)]
+
+    return token
+
 
 def _terms(text: str) -> Set[str]:
-    """Distinct topic-bearing words in `text`.
+    """Distinct topic-bearing words in `text`, reduced to their stems.
 
     A set rather than a count: whether a document mentions a term ten times or
     once says little at this corpus size, and repetition would let one long
     document dominate every question.
+
+    Stopwords are matched before stemming, so the list stays readable as the
+    words people actually type.
     """
     return {
-        token
+        _stem(token)
         for token in _TERM_RE.findall(text.lower())
         if len(token) >= MIN_TERM_LENGTH and token not in _STOPWORDS
     }
@@ -263,11 +302,21 @@ def select(
         logger.info("Selection: no distinguishing terms, sending all %d documents", available)
         return Selection(knowledge=knowledge, outcome=UNFOCUSED, available=available)
 
-    threshold = best * SELECTION_RATIO
+    # The weight of everything asked that this corpus recognises at all, which
+    # is what a document's score is a share of.
+    asked_weight = sum(index.weights.get(term, 0.0) for term in asked)
+    threshold = asked_weight * QUERY_COVERAGE
+
     chosen = tuple(
         section
         for section in knowledge.sections
-        if section.is_profile or scores[section.label] >= threshold
+        # The best match is kept whatever its share. Spread a question's terms
+        # across enough documents and every one of them falls under the
+        # threshold, which would drop the closest thing to an answer the corpus
+        # has - the one document guaranteed to be worth sending.
+        if section.is_profile
+        or scores[section.label] >= threshold
+        or scores[section.label] == best
     )
 
     if len(chosen) == available:
