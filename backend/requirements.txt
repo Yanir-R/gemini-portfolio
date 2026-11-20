@@ -1,9 +1,9 @@
 fastapi==0.140.0
 uvicorn==0.51.0
 python-dotenv==1.2.2
-pydantic[email]>=2.9.0
+pydantic[email]==2.14.3
 google-genai==2.14.0
-pypdf==6.14.2
+pypdf==6.21.4
 gunicorn==26.0.0
 google-cloud-storage==3.13.0
 email-validator==2.3.0
